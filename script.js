@@ -1,4 +1,4 @@
-Será que pasó algo feo puso por qué noconst usuario_id = localStorage.getItem("usuario_id");
+const usuario_id = localStorage.getItem("usuario_id");
 if (!usuario_id) {
   alert("No hay sesión iniciada. Volvé a ingresar.");
   window.location.href = "login.html";
