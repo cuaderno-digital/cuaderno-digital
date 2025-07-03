@@ -28,9 +28,9 @@ const formCampos = document.querySelectorAll("#registro-form input, #registro-fo
 let movimientos = [];
 let modoResaltado = null;
 let modoEliminar = false;
-let turnoAbierto = JSON.parse(localStorage.getItem("turnoAbierto")) ?? false;
+let turnoAbierto = false;
 let modoControl = false;
-let estadoControl = JSON.parse(localStorage.getItem("estadoControl")) || {};
+let estadoControl = {};
 function guardarEstadoControl() {
   localStorage.setItem("estadoControl", JSON.stringify(estadoControl));
 }
@@ -200,8 +200,34 @@ if (!modoControl && estadoControl[clave]?.error) {
 
   if (modoEliminar) resaltarFilasEliminables();
   mostrarControlEnFilas();
+await cargarEstadoControlDesdeNube(fechaFiltro.value);
 }
+async function verificarTurnoAbiertoDesdeNube() {
+  const hoy = new Date();
+  const inicio = new Date(hoy.setHours(0, 0, 0, 0)).toISOString();
+  const fin = new Date(hoy.setHours(23, 59, 59, 999)).toISOString();
 
+  const { data, error } = await supabase
+    .from("movimientos")
+    .select("usuario, hora")
+    .eq("usuario_id", usuario_id)
+    .gte("hora", inicio)
+    .lte("hora", fin)
+    .order("hora", { ascending: true });
+
+  if (error) {
+    console.error("❌ Error al consultar turno:", error);
+    return false;
+  }
+
+  let abierto = false;
+  for (const mov of data) {
+    if (mov.usuario?.startsWith("TURNO ABIERTO")) abierto = true;
+    if (mov.usuario === "TURNO CERRADO") abierto = false;
+  }
+
+  return abierto;
+}
 // ✅ Mostrar todo lo del día al cargar
 function mostrarMovimientosDelDia() {
   const hoy = new Date();
@@ -221,6 +247,7 @@ supabase.from("movimientos")
     }
     movimientos = data;
     mostrarMovimientosDeFecha(new Date());
+    cargarEstadoControlDesdeNube(fechaFiltro.value);
   });
 
 }
@@ -418,13 +445,17 @@ actualizarCartelTurno();
 });
 
 
-// Ejecutar al inicio
-actualizarFechaHora();
-setFechaActualEnFiltro();
-mostrarMovimientosDelDia(); // ✅ ESTA es la función correcta
-habilitarFormulario(turnoAbierto);
-actualizarCartelTurno();
-document.getElementById("btn-pendiente").disabled = !turnoAbierto;
+// Ejecutar al inicio correctamente
+(async () => {
+  actualizarFechaHora();
+  setFechaActualEnFiltro();
+  
+  turnoAbierto = await verificarTurnoAbiertoDesdeNube();
+  mostrarMovimientosDelDia();
+  habilitarFormulario(turnoAbierto);
+  actualizarCartelTurno();
+  document.getElementById("btn-pendiente").disabled = !turnoAbierto;
+})();
 
 // 🔒 Agregamos referencias para botones de control
 const btnHacerControl = document.getElementById("btn-hacer-control");
