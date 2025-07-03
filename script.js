@@ -122,7 +122,6 @@ supabase.from("movimientos").insert([nuevo]).select().then(({ data, error }) => 
   if (data && data.length > 0) {
     // Reemplazamos el objeto entero con el que vino de Supabase
     movimientos.push(data[0]);
-    console.log("ID asignado:", data[0].id);
 
     // 👇 Esta línea va acá: actualiza la vista con los movimientos REALES
     mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
@@ -584,7 +583,7 @@ function mostrarControlEnFilas() {
 const clave = `${fechaClave}-${mov.id}`;
 const estado = estadoControl[clave];
 
-    if (!modoControl && !estado) return;
+    if (!estado) return;
 
     const celdaMonto = row.cells[1];
     const contenedor = document.createElement("div");
