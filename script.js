@@ -344,6 +344,7 @@ tabla.addEventListener("click", async (e) => {
     const { data: nuevos, error: recargaError } = await supabase
       .from("movimientos")
       .select("*")
+      .eq("usuario_id", usuario_id)
       .gte("hora", inicio)
       .lte("hora", fin)
       .order("hora", { ascending: true });
