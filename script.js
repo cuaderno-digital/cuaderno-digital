@@ -1,4 +1,4 @@
-const usuario_id = localStorage.getItem("usuario_id");
+Será que pasó algo feo puso por qué noconst usuario_id = localStorage.getItem("usuario_id");
 if (!usuario_id) {
   alert("No hay sesión iniciada. Volvé a ingresar.");
   window.location.href = "login.html";
@@ -581,9 +581,20 @@ function mostrarControlEnFilas() {
 
     const fechaClave = fechaFiltro.value;
 const clave = `${fechaClave}-${mov.id}`;
-const estado = estadoControl[clave];
+let estado = estadoControl[clave];
 
-    if (!estado) return;
+if (!estado && modoControl) {
+  estado = { panel: false, pago: false, error: false };
+  estadoControl[clave] = estado;
+}
+
+    // ⚠️ NO mostrar nada si no hay estado o todo está en falso y no estamos en modo control
+if (
+  !estado ||
+  (!modoControl && !estado.panel && !estado.pago && !estado.error)
+) {
+  return;
+}
     if (estado.error) row.classList.add("fila-error-control");
     const celdaMonto = row.cells[1];
     const contenedor = document.createElement("div");
@@ -609,37 +620,40 @@ const estado = estadoControl[clave];
     cruzado.textContent = estado?.error ? "❌" : "⚪";
 
     if (modoControl) {
-      // ✅ Panel
-      tildadoPanel.addEventListener("click", () => {
-        const fechaClave = fechaFiltro.value;
-        const clave = `${fechaClave}-${mov.id}`;
-        estadoControl[clave] = estadoControl[clave] || {};
-        estadoControl[clave].panel = !estadoControl[clave].panel;
-        guardarEstadoControl();
-        guardarEstadoEnNube(mov.id, fechaClave, estadoControl[clave]);
-        setTimeout(() => mostrarMovimientosDeFecha(new Date(fechaFiltro.value)), 10);
-      });
-
-// 💰 Pago
-tildadoPago.addEventListener("click", () => {
+      // PANEL
+tildadoPanel.addEventListener("click", async () => {
   const fechaClave = fechaFiltro.value;
   const clave = `${fechaClave}-${mov.id}`;
   estadoControl[clave] = estadoControl[clave] || {};
-  estadoControl[clave].pago = !estadoControl[clave].pago;
+  const nuevo = !estadoControl[clave].panel;
+  estadoControl[clave].panel = nuevo;
   guardarEstadoControl();
-  guardarEstadoEnNube(mov.id, fechaClave, estadoControl[clave]);
-  setTimeout(() => mostrarMovimientosDeFecha(new Date(fechaFiltro.value)), 10);
+  await guardarEstadoEnNube(mov.id, fechaClave, estadoControl[clave]);
+  tildadoPanel.textContent = nuevo ? "✅" : "⚪";
 });
 
-// ❌ Error (solo este tiene que quedar)
-cruzado.addEventListener("click", () => {
+// PAGO
+tildadoPago.addEventListener("click", async () => {
   const fechaClave = fechaFiltro.value;
   const clave = `${fechaClave}-${mov.id}`;
   estadoControl[clave] = estadoControl[clave] || {};
-  estadoControl[clave].error = !estadoControl[clave].error;
+  const nuevo = !estadoControl[clave].pago;
+  estadoControl[clave].pago = nuevo;
   guardarEstadoControl();
-  guardarEstadoEnNube(mov.id, fechaClave, estadoControl[clave]);
-  setTimeout(() => mostrarMovimientosDeFecha(new Date(fechaFiltro.value)), 10);
+  await guardarEstadoEnNube(mov.id, fechaClave, estadoControl[clave]);
+  tildadoPago.textContent = nuevo ? "💰" : "⚪";
+});
+
+// ERROR
+cruzado.addEventListener("click", async () => {
+  const fechaClave = fechaFiltro.value;
+  const clave = `${fechaClave}-${mov.id}`;
+  estadoControl[clave] = estadoControl[clave] || {};
+  const nuevo = !estadoControl[clave].error;
+  estadoControl[clave].error = nuevo;
+  guardarEstadoControl();
+  await guardarEstadoEnNube(mov.id, fechaClave, estadoControl[clave]);
+  cruzado.textContent = nuevo ? "❌" : "⚪";
 });
 
     }
