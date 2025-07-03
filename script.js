@@ -187,7 +187,7 @@ async function mostrarMovimientosDeFecha() {
 
     const fechaClave = fechaFiltro.value;
 const clave = `${fechaClave}-${mov.id}`;
-if (!modoControl && estadoControl[clave]?.error) {
+if (estadoControl[clave]?.error) {
       row.classList.add("fila-error-control");
     }
 
@@ -198,8 +198,8 @@ if (!modoControl && estadoControl[clave]?.error) {
   });
 
   if (modoEliminar) resaltarFilasEliminables();
+  await cargarEstadoControlDesdeNube(fechaFiltro.value);
   mostrarControlEnFilas();
-await cargarEstadoControlDesdeNube(fechaFiltro.value);
 }
 async function verificarTurnoAbiertoDesdeNube() {
   const hoy = new Date();
@@ -584,7 +584,7 @@ const clave = `${fechaClave}-${mov.id}`;
 const estado = estadoControl[clave];
 
     if (!estado) return;
-
+    if (estado.error) row.classList.add("fila-error-control");
     const celdaMonto = row.cells[1];
     const contenedor = document.createElement("div");
     contenedor.style.display = "flex";
