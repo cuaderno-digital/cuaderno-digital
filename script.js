@@ -131,7 +131,6 @@ supabase.from("movimientos").insert([nuevo]).select().then(({ data, error }) => 
 
 
   form.reset();
-  mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
 });
 
 // ✅ Evento para filtrar por fecha
@@ -166,7 +165,6 @@ async function mostrarMovimientosDeFecha() {
 
     const row = tabla.insertRow();
     row.setAttribute("data-index", index);
-    console.log("Fila", index, "ID:", mov.id);
     row.insertCell(0).textContent = mov.usuario;
     row.insertCell(1).textContent =
       mov.tipo === "turno" || mov.monto === null || mov.monto === undefined || mov.monto === ""
@@ -784,30 +782,33 @@ window.confirmarAbrirTurno = confirmarAbrirTurno;
 async function eliminarDatosViejos() {
   const hoy = new Date();
   const fechaLimite = new Date(hoy.setDate(hoy.getDate() - 15)).toISOString();
+  const fechaTexto = fechaLimite.split("T")[0];
 
-  // 🧹 Eliminar movimientos
+  // 🧹 Eliminar movimientos del usuario
   const { error: errorMov } = await supabase
     .from("movimientos")
     .delete()
-    .lt("hora", fechaLimite);
+    .lt("hora", fechaLimite)
+    .eq("usuario_id", usuario_id);
 
-  if (errorMov) {
-    console.error("❌ Error al eliminar movimientos viejos:", errorMov);
-  }
+  if (errorMov) console.error("❌ Error al eliminar movimientos viejos:", errorMov);
 
-  // 🧹 Eliminar controles
-  const fechaTexto = fechaLimite.split("T")[0]; // solo la fecha
+  // 🧹 Eliminar controles del usuario
   const { error: errorCtrl } = await supabase
     .from("controles")
     .delete()
-    .lt("fecha", fechaTexto);
+    .lt("fecha", fechaTexto)
+    .eq("usuario_id", usuario_id);
 
-  if (errorCtrl) {
-    console.error("❌ Error al eliminar controles viejos:", errorCtrl);
-  }
+  if (errorCtrl) console.error("❌ Error al eliminar controles viejos:", errorCtrl);
 
   console.log("✅ Limpieza de datos antiguos completa.");
 }
 
 // Ejecutamos la función al inicio
-eliminarDatosViejos();
+const ultimaLimpieza = localStorage.getItem("ultimaLimpieza");
+const hoyTexto = new Date().toISOString().split("T")[0];
+if (ultimaLimpieza !== hoyTexto) {
+  eliminarDatosViejos();
+  localStorage.setItem("ultimaLimpieza", hoyTexto);
+}
