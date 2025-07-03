@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cuaderno Digital - Red Genesis</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<script>
+  if (!localStorage.getItem("usuarioLogueado")) {
+    window.location.href = "login.html";
+  }
+</script>
+
+<body>
+  <div class="container">
+
+    <div class="top-header">
+      <div class="turno-buttons">
+        <button id="btn-abrir-turno">Abrir Turno</button>
+        <button id="btn-cerrar-turno">Cerrar Turno</button>
+        <button id="btn-hacer-control">Hacer Control</button>
+        <button id="btn-terminar-control">Cerrar Control</button>
+        <button id="consultar" class="btn-accion">Consultar</button>
+        <button id="cerrar-sesion" class="boton-amarillo">Cerrar Sesión</button>
+        <div id="cartel-estado-turno" style="display: none; font-weight: bold; color: red; text-align: center; margin-top: 12px;">
+          TURNO CERRADO
+        </div>
+      </div>
+
+      <div class="titulo-hora-ajustada">
+        <h1 class="titulo-central">CUADERNO DIGITAL</h1>
+        <div id="fecha-hora" class="fecha-centro"></div>
+      </div>
+    </div>
+
+    <!-- 🔶 Botón de Pendiente -->
+    <div style="text-align: center; margin-top: 10px;">
+      <button id="btn-pendiente" style="background: orange; color: black; font-weight: bold; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+        + Pendiente
+      </button>
+    </div>
+
+    <!-- 🔶 Formulario oculto -->
+    <div id="form-pendiente" style="display: none; text-align: center; margin-top: 8px;">
+      <input type="text" id="pendiente-usuario" placeholder="Usuario" style="padding: 6px; width: 120px; margin: 4px;">
+      <input type="number" id="pendiente-total" placeholder="Total" style="padding: 6px; width: 100px; margin: 4px;">
+      <input type="number" id="pendiente-restante" placeholder="Falta" style="padding: 6px; width: 100px; margin: 4px;">
+      <button id="guardar-pendiente" style="margin-left: 10px;">Guardar</button>
+    </div>
+
+    <!-- 🔶 Tabla de premios pendientes ampliada -->
+<div id="tabla-pendientes" style="display: none; position: absolute; top: 90px; right: 10px; background: #111; border: 1px solid #FFD700; padding: 10px; border-radius: 8px; width: 380px; z-index: 999;">
+  <h3 style="color: orange; font-size: 1rem; margin-bottom: 10px; text-align: center;">Premios Pendientes</h3>
+
+  <div style="max-height: 165px; overflow-y: auto; overflow-x: hidden;">
+    <table style="width: 100%; font-size: 0.85rem; color: white; border-collapse: collapse;">
+      <thead>
+  <tr>
+    <th style="text-align: center;">Usuario</th>
+    <th style="text-align: center;">Total</th>
+    <th style="text-align: center;">Falta</th>
+    <th style="text-align: center; width: 40px;">✔</th>
+  </tr>
+</thead>
+
+      <tbody id="pendientes-body">
+        <!-- Registros dinámicos -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+
+
+
+    <!-- 🔹 Formulario de Registro -->
+    <form id="registro-form">
+      <div class="campo">
+        <input type="text" id="usuario" placeholder="Usuario o Gasto" required autocomplete="off" />
+      </div>
+
+      <div class="campo monto-container">
+        <input type="number" id="monto" placeholder="Monto" required />
+        <div class="monto-botones">
+          <button type="button" class="btn-monto" data-valor="100">100</button>
+          <button type="button" class="btn-monto" data-valor="500">500</button>
+          <button type="button" class="btn-monto" data-valor="1000">1k</button>
+          <button type="button" class="btn-monto" data-valor="5000">5k</button>
+        </div>
+      </div>
+
+      <div class="campo">
+        <input type="text" id="observacion" placeholder="Observación (opcional)" />
+      </div>
+
+      <button type="submit">Registrar</button>
+    </form>
+
+    <!-- 🔹 Filtros y Marcadores -->
+    <div class="filtros-flex">
+      <div class="filtro-fecha">
+        <label for="fechaFiltro">Filtrar por fecha:</label>
+        <input type="date" id="fechaFiltro" />
+        <button id="btn-buscar-fecha">Buscar</button>
+      </div>
+      <div class="marcadores">
+        <button id="marcar-gasto" class="btn-marcar amarillo">Marcar Gasto</button>
+        <button id="marcar-st" class="btn-marcar rojo">Marcar ST</button>
+        <button id="modo-eliminar" class="btn-marcar basura">🗑️ Eliminar</button>
+      </div>
+    </div>
+
+    <!-- 🔹 Tabla principal -->
+    <table id="tabla-registros">
+      <thead>
+        <tr>
+          <th>Usuario/Gasto</th>
+          <th>Monto</th>
+          <th>Observación</th>
+          <th>Hora</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Carga dinámica -->
+      </tbody>
+    </table>
+<!-- MODAL DE CONSULTA -->
+<div id="modal-consulta" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+  <div style="background:#222; padding:30px; border:2px solid gold; border-radius:12px; color:white; font-size:1.2rem; max-width:90%; text-align:center;">
+    <h2 style="color:gold; font-size:1.6rem;">🟨 CONSULTA DEL DÍA</h2>
+    <p id="contenido-consulta" style="margin-top:15px;"></p>
+    <button id="btn-cerrar-consulta" style="margin-top:20px; padding:10px 20px; background-color:gold; border:none; color:#000; font-weight:bold; border-radius:8px; font-size:1rem; cursor:pointer;">
+      Aceptar
+    </button>
+  </div>
+</div>
+<!-- MODAL PARA ABRIR TURNO -->
+<div id="modal-turno" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+  <div style="background:#222; padding:25px; border:2px solid gold; border-radius:12px; color:white; font-size:1.1rem; max-width:400%; text-align:center;">
+    <h2 style="color:gold;">🟨 ABRIR TURNO</h2>
+    <p style="margin-top: 10px;">¿Quién abre el turno?</p>
+    <input id="input-turno-nombre" type="text" placeholder="Nombre..." style="margin-top:10px; padding:8px; width:90%; max-width:280px; border-radius:8px; border:none; font-size:1rem;">
+    <div style="margin-top:20px;">
+      <button onclick="cerrarModalTurno()" style="margin-right: 10px; padding:8px 16px; background:#666; border:none; border-radius:6px; color:white;">Cancelar</button>
+      <button onclick="confirmarAbrirTurno()" style="padding:8px 16px; background:gold; border:none; border-radius:6px; color:black; font-weight:bold;">Abrir</button>
+    </div>
+  </div>
+</div>
+  </div>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
