@@ -1300,24 +1300,29 @@ document.getElementById("form-subir-control").addEventListener("submit", async (
   }
 
   const fecha = new Date().toISOString().split("T")[0];
-  const hora = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); // ✅ hora local "19:03"
+const hora_envio = new Date().toLocaleTimeString("es-AR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
+});
 
-  console.log("🟡 Enviando a Supabase:", {
-    usuario_id,
-    fecha,
-    hora_envio,
-    cuentas,
-    fichas,
-    gastos
-  });
-  const { error } = await supabase.from("controles_subidos").insert([{
-    usuario_id,
-    fecha,
-    hora_envio,
-    cuentas,
-    fichas,
-    gastos
-  }]);
+console.log("🟡 Enviando a Supabase:", {
+  usuario_id,
+  fecha,
+  hora_envio,
+  cuentas,
+  fichas,
+  gastos
+});
+
+const { error } = await supabase.from("controles_subidos").insert([{
+  usuario_id,
+  fecha,
+  hora_envio,
+  cuentas,
+  fichas,
+  gastos
+}]);
 
   if (error) {
     console.error("❌ Error al subir control:", error);
