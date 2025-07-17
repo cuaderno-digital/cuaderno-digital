@@ -208,14 +208,12 @@ th, td {
   color: white;
 }
 
-.top-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1000px;
-  margin: auto;
-  padding: 0 10px;
-  margin-bottom: 15px;
+.titulo-hora-ajustada {
+  flex-grow: 1;
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 10px;
 }
 
 .turno-buttons {
@@ -375,4 +373,150 @@ th, td {
     font-size: 0.8rem;
     padding: 6px;
   }
+}
+#btn-volver-arriba {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 48px;
+  height: 48px;
+  font-size: 26px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid #999;
+  border-radius: 10px;
+  cursor: pointer;
+  display: none;
+  z-index: 999;
+  transition: background 0.3s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#btn-volver-arriba,
+#btn-ir-abajo {
+  position: fixed;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-weight: bold;
+  border: 2px solid #fff;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  z-index: 999;
+  display: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+#btn-volver-arriba {
+  bottom: 20px;
+}
+
+#btn-ir-abajo {
+  top: 90px;
+}
+
+#btn-volver-arriba:hover,
+#btn-ir-abajo:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.08);
+}
+
+#btn-volver-arriba {
+  bottom: 20px;
+}
+
+#btn-ir-abajo {
+  bottom: 70px; /* lo separa del otro */
+}
+
+#btn-volver-arriba:hover,
+#btn-ir-abajo:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.08);
+}
+.separador-control {
+  background-color: #0066cc88;
+  font-weight: bold;
+  color: white;
+}
+.turno-buttons button {
+  display: block;
+  margin: 8px 0; /* ⬅️ Asegura espacio uniforme */
+  width: 160px;
+  padding: 10px;
+  background-color: #222;
+  color: gold;
+  border: 1px solid gold;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.titulo-hora-ajustada {
+  flex-grow: 1;
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.titulo-central {
+  margin-bottom: 5px;
+}
+
+#fecha-hora {
+  margin-top: 0;
+}
+/* ✅ Correcciones para posición de botones y layout */
+.turno-buttons {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+}
+
+/* Contenedor principal para centrar el título y formulario */
+.top-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  padding-left: 160px; /* Empuja el contenido a la derecha para no pisar los botones */
+}
+
+.titulo-hora-ajustada {
+  margin-top: 0;
+  padding-top: 10px;
+  text-align: center;
+  width: 100%;
+}
+.tab-bono {
+  background-color: #222;
+  color: gold;
+  border: 1px solid gold;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.tab-bono:hover {
+  background-color: gold;
+  color: black;
+}
+
+.tab-bono.activo-tab {
+  background-color: gold;
+  color: black;
+  box-shadow: 0 0 8px gold;
 }
