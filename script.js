@@ -1300,7 +1300,7 @@ document.getElementById("form-subir-control").addEventListener("submit", async (
   }
 
   const fecha = new Date().toISOString().split("T")[0];
-  const hora_envio = new Date().toISOString();
+  const hora = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); // ✅ hora local "19:03"
 
   console.log("🟡 Enviando a Supabase:", {
     usuario_id,
