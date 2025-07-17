@@ -94,7 +94,7 @@ async function agregarFilaTurno(texto) {
 
 
 // ✅ Evento para guardar movimiento normal
-form.addEventListener("submit", (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const usuario = document.getElementById("usuario").value;
   const monto = parseInt(document.getElementById("monto").value);
@@ -109,7 +109,22 @@ form.addEventListener("submit", (e) => {
     hora: hora.toISOString(),
     color: null
   };
+  const esBono = modoBono && pestañaActiva === "bono";
 
+  if (esBono) {
+    const bono = {
+      usuario,
+      usuario_id,
+      monto,
+      observacion,
+      hora: hora.toISOString(),
+      activo: true
+    };
+  
+    await guardarBonoEnNube(bono);
+    form.reset();
+    return;
+  }
 
 // Además, guardar en Supabase
 supabase.from("movimientos").insert([nuevo]).select().then(({ data, error }) => {
@@ -125,6 +140,11 @@ supabase.from("movimientos").insert([nuevo]).select().then(({ data, error }) => 
 
     // 👇 Esta línea va acá: actualiza la vista con los movimientos REALES
     mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
+    // 🔽 Autoscroll automático al final
+setTimeout(() => {
+  const tablaContainer = document.getElementById("tabla-registros");
+  tablaContainer?.scrollIntoView({ behavior: "smooth", block: "end" });
+}, 200);
   }
 });
 
@@ -141,7 +161,7 @@ document.getElementById("btn-buscar-fecha").addEventListener("click", () => {
 
   supabase.from("movimientos")
   .select("*")
-  .eq("usuario_id", usuario_id)
+  .eq("usuario_id", usuario_id) // 👈🏽 ESTO FALTABA
   .gte("hora", inicio)
   .lte("hora", fin)
   .order("hora", { ascending: true })
@@ -179,6 +199,19 @@ async function mostrarMovimientosDeFecha() {
 
     if (mov.color === "amarillo") {
       row.classList.add("destacado-amarillo");
+    } else if (mov.color === "separador") {
+      row.classList.add("separador-control");
+      const horaTexto = new Date(mov.hora).toLocaleTimeString("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+      row.innerHTML = `
+        <td></td>
+        <td style="text-align:center; font-weight:bold;">🔵 FIN CONTROL</td>
+        <td></td>
+        <td style="text-align:center;">${horaTexto}</td>
+    `;
     } else if (mov.color === "rojo") {
       row.classList.add("destacado-rojo");
     } else if (mov.color === "turno") {
@@ -199,7 +232,7 @@ if (estadoControl[clave]?.error) {
 
   if (modoEliminar) resaltarFilasEliminables();
   await cargarEstadoControlDesdeNube(fechaFiltro.value);
-  mostrarControlEnFilas();
+mostrarControlEnFilas();
 }
 async function verificarTurnoAbiertoDesdeNube() {
   const hoy = new Date();
@@ -235,7 +268,7 @@ const fin = new Date(hoy.setHours(23, 59, 59, 999)).toISOString();
 
 supabase.from("movimientos")
   .select("*")
-  .eq("usuario_id", usuario_id)
+  .eq("usuario_id", usuario_id) // 👈🏽 ESTE FILTRO ES CLAVE
   .gte("hora", inicio)
   .lte("hora", fin)
   .order("hora", { ascending: true })
@@ -299,6 +332,11 @@ btnEliminar.addEventListener("click", () => {
   btnST.classList.remove("activo");
 
   mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
+
+  // ✅ Si está activo el modo bono, también refrescamos la tabla de bonos
+  if (modoBono && pestañaActiva === "bono") {
+    mostrarTablaBonos();
+  }
 });
 
 
@@ -308,7 +346,7 @@ function resaltarFilasEliminables() {
   Array.from(tabla.rows).forEach((row) => {
     const index = parseInt(row.dataset.index);
     const mov = movimientos[index];
-    if (!mov || mov.tipo === "turno") return;
+    if (!mov || mov.tipo === "turno" || mov.tipo === "separador") return;
 
     const movHora = new Date(mov.hora);
     const minutos = (ahora - movHora) / 1000 / 60;
@@ -328,7 +366,7 @@ tabla.addEventListener("click", async (e) => {
 
   const index = parseInt(fila.dataset.index);
   const mov = movimientos[index];
-  if (!mov || mov.tipo === "turno") return;
+  if (!mov || mov.tipo === "turno" || mov.tipo === "separador") return;
 
   if (modoEliminar) {
     const ahora = new Date();
@@ -366,12 +404,12 @@ tabla.addEventListener("click", async (e) => {
     const fin = new Date(fecha.setHours(23, 59, 59, 999)).toISOString();
   
     const { data: nuevos, error: recargaError } = await supabase
-      .from("movimientos")
-      .select("*")
-      .eq("usuario_id", usuario_id)
-      .gte("hora", inicio)
-      .lte("hora", fin)
-      .order("hora", { ascending: true });
+  .from("movimientos")
+  .select("*")
+  .eq("usuario_id", usuario_id) // ✅ este filtro faltaba
+  .gte("hora", inicio)
+  .lte("hora", fin)
+  .order("hora", { ascending: true });
   
     if (recargaError) {
       console.error("❌ Error al recargar desde Supabase:", recargaError);
@@ -443,12 +481,37 @@ actualizarCartelTurno();
   document.getElementById("btn-pendiente").disabled = true;
 });
 
+const btnModoBono = document.getElementById("btn-bono");
 
-// Ejecutar al inicio correctamente
+// ✅ Ejecutar todo al iniciar
 (async () => {
   actualizarFechaHora();
   setFechaActualEnFiltro();
-  
+  console.log("🟡 INICIO: chequeando estado del bono desde la nube...");
+
+  // ✅ Restaurar modo BONO si quedó activo en la nube
+  const { data: estadoBono, error: errorBono } = await supabase
+    .from("estado_bono")
+    .select("*")
+    .eq("usuario_id", usuario_id)
+    .single();
+
+  if (!errorBono && estadoBono?.activo) {
+    console.log("✅ BONO ACTIVO DETECTADO, restaurando visualmente...");
+    modoBono = true;
+    pestañaActiva = "bono";
+    btnModoBono.textContent = "Terminar Bono";
+    document.getElementById("registro-form").dataset.tab = "bono";
+    document.getElementById("tab-bono").classList.add("activo-tab");
+    document.getElementById("tab-normal").classList.remove("activo-tab");
+    tabsBonos.style.display = "flex";
+    document.getElementById("tabla-registros").style.display = "none";
+    document.getElementById("tabla-bonos").style.display = "table";
+    await cargarBonosDesdeNube();
+  } else {
+    console.log("🚫 BONO NO ACTIVO o error al cargar:", errorBono);
+  }
+
   turnoAbierto = await verificarTurnoAbiertoDesdeNube();
   mostrarMovimientosDelDia();
   habilitarFormulario(turnoAbierto);
@@ -588,14 +651,15 @@ if (!estado && modoControl) {
   estadoControl[clave] = estado;
 }
 
-    // ⚠️ NO mostrar nada si no hay estado o todo está en falso y no estamos en modo control
+// ⚠️ NO mostrar nada si no hay estado o todo está en falso y no estamos en modo control
 if (
   !estado ||
   (!modoControl && !estado.panel && !estado.pago && !estado.error)
 ) {
   return;
 }
-    if (estado.error) row.classList.add("fila-error-control");
+if (estado.error) row.classList.add("fila-error-control");
+
     const celdaMonto = row.cells[1];
     const contenedor = document.createElement("div");
     contenedor.style.display = "flex";
@@ -644,6 +708,7 @@ tildadoPago.addEventListener("click", async () => {
   tildadoPago.textContent = nuevo ? "💰" : "⚪";
 });
 
+
 // ERROR
 cruzado.addEventListener("click", async () => {
   const fechaClave = fechaFiltro.value;
@@ -688,7 +753,7 @@ btnHacerControl.addEventListener("click", () => {
 });
 
 // 🔒 Botón para finalizar control
-btnTerminarControl.addEventListener("click", () => {
+btnTerminarControl.addEventListener("click", async () => {
   if (!modoControl) {
     alert("No hay ningún control en curso para finalizar.");
     return;
@@ -696,6 +761,7 @@ btnTerminarControl.addEventListener("click", () => {
 
   modoControl = false;
   alert("Control finalizado. Todo queda guardado.");
+  await agregarFilaSeparador();
   mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
 });
 
@@ -848,6 +914,24 @@ async function eliminarDatosViejos() {
 
   console.log("✅ Limpieza de datos antiguos completa.");
 }
+// ✅ Agrega separador visual al cerrar control
+async function agregarFilaSeparador() {
+  const ahora = new Date();
+  const separador = {
+    usuario: "SEPARADOR CONTROL",
+    usuario_id,
+    monto: null,
+    observacion: "",
+    hora: ahora.toISOString(),
+    color: "separador",
+    tipo: "separador"
+  };
+
+  movimientos.push(separador);
+
+  const { error } = await supabase.from("movimientos").insert([separador]);
+  if (error) console.error("Error al guardar separador:", error);
+}
 
 // Ejecutamos la función al inicio
 const ultimaLimpieza = localStorage.getItem("ultimaLimpieza");
@@ -856,3 +940,413 @@ if (ultimaLimpieza !== hoyTexto) {
   eliminarDatosViejos();
   localStorage.setItem("ultimaLimpieza", hoyTexto);
 }
+// 🔼 Mostrar botón para volver arriba si se scrollea
+const btnVolverArriba = document.getElementById("btn-volver-arriba");
+window.addEventListener("scroll", () => {
+  btnVolverArriba.style.display = window.scrollY > 100 ? "block" : "none";
+});
+btnVolverArriba.addEventListener("click", () => {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+let modoBono = false;
+
+
+// 👉 Crear solapas dinámicamente (inicialmente ocultas)
+const tabsBonos = document.createElement("div");
+tabsBonos.id = "tabs-bonos";
+tabsBonos.style.display = "none";
+tabsBonos.style.marginLeft = "10px";
+tabsBonos.style.gap = "8px";
+
+tabsBonos.innerHTML = `
+  <button id="tab-normal" class="tab-bono activo-tab">1</button>
+  <button id="tab-bono" class="tab-bono">2</button>
+`;
+
+document.querySelector(".filtro-fecha").appendChild(tabsBonos);
+
+// 👉 Eventos para alternar pestañas
+let pestañaActiva = "normal";
+document.addEventListener("click", (e) => {
+  if (e.target.id === "tab-normal") {
+    pestañaActiva = "normal";
+    document.getElementById("registro-form").dataset.tab = "normal";
+    document.getElementById("tab-normal").classList.add("activo-tab");
+    document.getElementById("tab-bono").classList.remove("activo-tab");
+
+    // Mostrar tabla normal, ocultar bono
+    document.getElementById("tabla-registros").style.display = "table";
+    document.getElementById("tabla-bonos").style.display = "none";
+  }
+
+  if (e.target.id === "tab-bono") {
+    pestañaActiva = "bono";
+    document.getElementById("registro-form").dataset.tab = "bono";
+    document.getElementById("tab-bono").classList.add("activo-tab");
+    document.getElementById("tab-normal").classList.remove("activo-tab");
+
+    // Mostrar tabla bono, ocultar la normal
+    document.getElementById("tabla-registros").style.display = "none";
+    document.getElementById("tabla-bonos").style.display = "table";
+
+    mostrarTablaBonos();
+  }
+});
+
+// 👉 Evento botón Modo Bono
+btnModoBono.addEventListener("click", async () => {
+  if (!modoBono) {
+    const clave = prompt("Clave para activar BONO:");
+    if (clave !== "120212") {
+      alert("Clave incorrecta.");
+      return;
+    }
+
+    modoBono = true;
+    await guardarEstadoBonoEnNube(true);
+    btnModoBono.textContent = "Terminar Bono";
+    document.getElementById("registro-form").dataset.tab = "bono";
+    pestañaActiva = "bono";
+    document.getElementById("tab-bono").classList.add("activo-tab");
+    document.getElementById("tab-normal").classList.remove("activo-tab");
+    tabsBonos.style.display = "flex";
+    document.getElementById("tabla-registros").style.display = "none";
+    document.getElementById("tabla-bonos").style.display = "table";
+    mostrarTablaBonos();
+  } else {
+    // 👇 TERMINAR BONO
+    if (listaBonos.length === 0) {
+      alert("No hay bonos cargados. No se registrará nada.");
+    } else {
+      const total = listaBonos.reduce((acc, b) => acc + Number(b.monto || 0), 0);
+      const bonoFinal = {
+        usuario: "BONO",
+        usuario_id,
+        monto: total,
+        observacion: "desde modo bono",
+        hora: new Date().toISOString(),
+        color: "amarillo",
+        tipo: "bono"
+      };
+
+      const { error } = await supabase.from("movimientos").insert([bonoFinal]);
+      if (error) {
+        alert("❌ Error al guardar el bono en la nube.");
+        console.error("Error Supabase:", error);
+        return;
+      }
+      // 🔥 Borrar todos los bonos temporales de la nube de este usuario
+await supabase
+.from("bonos_temp")
+.update({ activo: false })
+.eq("usuario_id", usuario_id)
+.eq("activo", true);
+
+      alert(`✅ Bono registrado por $${total.toLocaleString("es-AR")}`);
+    }
+
+    // 🔄 Resetear todo
+    modoBono = false;
+    await guardarEstadoBonoEnNube(false);
+    listaBonos = [];
+    btnModoBono.textContent = "Modo Bono";
+    pestañaActiva = "normal";
+    tabsBonos.style.display = "none";
+    document.getElementById("registro-form").dataset.tab = "normal";
+    document.getElementById("tab-normal").classList.add("activo-tab");
+    document.getElementById("tab-bono").classList.remove("activo-tab");
+    document.getElementById("tabla-bonos").style.display = "none";
+    document.getElementById("tabla-registros").style.display = "table";
+    form.reset();
+    mostrarMovimientosDelDia(); // actualizar tabla original
+  }
+});
+
+function mostrarTablaBonos() {
+  const tablaBono = document.getElementById("tabla-bonos");
+  if (!tablaBono) return;
+
+  const cuerpo = tablaBono.querySelector("tbody");
+  cuerpo.innerHTML = "";
+
+  listaBonos.forEach((bono, index) => {
+    const ahora = new Date();
+    const horaBono = new Date(bono.hora);
+    const minutos = (ahora - horaBono) / 60000;
+    const puedeBorrar = minutos <= 5;
+
+    const row = document.createElement("tr");
+    row.dataset.index = index;
+    row.innerHTML = `
+      <td>${bono.usuario}</td>
+      <td>$${Number(bono.monto).toLocaleString("es-AR")}</td>
+      <td>${bono.observacion || ""}</td>
+      <td>${horaBono.toLocaleTimeString("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      })}</td>
+    `;
+
+    // 👉 destacar si está en modo eliminar y se puede borrar
+    if (modoEliminar && puedeBorrar) {
+      row.classList.add("fila-eliminable");
+      row.style.cursor = "pointer";
+    } else {
+      row.classList.remove("fila-eliminable");
+      row.style.cursor = "";
+    }
+
+    cuerpo.appendChild(row);
+  });
+}
+let listaBonos = [];
+
+async function guardarBonoEnNube(bono) {
+  const { error } = await supabase.from("bonos_temp").insert([bono]);
+  if (error) {
+    console.error("❌ ERROR al guardar bono temporal:", JSON.stringify(error, null, 2));
+    alert("Error al guardar bono. Revisá la consola.");
+  }
+  else await cargarBonosDesdeNube(); // refrescar
+}
+
+async function cargarBonosDesdeNube() {
+  const { data, error } = await supabase
+    .from("bonos_temp")
+    .select("*")
+    .eq("usuario_id", usuario_id)
+    .eq("activo", true)
+    .order("hora", { ascending: true });
+
+  if (error) {
+    console.error("Error al cargar bonos:", error);
+    return;
+  }
+
+  listaBonos = data;
+  if (modoBono) mostrarTablaBonos();
+}
+
+async function eliminarBono(index) {
+  const bono = listaBonos[index];
+  if (!bono) return;
+
+  const ahora = new Date();
+  const horaBono = new Date(bono.hora);
+  const minutos = (ahora - horaBono) / 60000;
+
+  if (minutos > 5) {
+    alert("Solo podés eliminar un bono en los primeros 5 minutos.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("bonos_temp")
+    .update({ activo: false })
+    .eq("id", bono.id);
+
+  if (error) console.error("Error al eliminar bono:", error);
+  else await cargarBonosDesdeNube();
+}
+async function guardarEstadoBonoEnNube(activo) {
+  const ahora = new Date().toISOString();
+  await supabase
+    .from("estado_bono")
+    .upsert([{ usuario_id, activo, hora_inicio: ahora }], {
+      onConflict: ["usuario_id"]
+    });
+}
+// ✅ Manejar clic en tabla de bonos para eliminar si está en modoEliminar
+document.getElementById("tabla-bonos").addEventListener("click", async (e) => {
+  if (!modoEliminar) return;
+
+  const fila = e.target.closest("tr");
+  if (!fila) return;
+
+  const index = parseInt(fila.dataset.index);
+  const bono = listaBonos[index];
+  if (!bono) return;
+
+  const ahora = new Date();
+  const horaBono = new Date(bono.hora);
+  const minutos = (ahora - horaBono) / 60000;
+
+  if (minutos > 5) {
+    alert("Solo podés eliminar un bono en los primeros 5 minutos.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("bonos_temp")
+    .update({ activo: false })
+    .eq("id", bono.id);
+
+  if (error) {
+    console.error("Error al eliminar bono:", error);
+    alert("No se pudo borrar el bono");
+    return;
+  }
+
+  await cargarBonosDesdeNube();
+});
+const btnIrAbajo = document.getElementById("btn-ir-abajo");
+
+window.addEventListener("scroll", () => {
+  const scrollY = window.scrollY;
+  const altura = document.documentElement.scrollHeight - window.innerHeight;
+
+  btnVolverArriba.style.display = scrollY > 100 ? "block" : "none";
+  btnIrAbajo.style.display = scrollY < altura - 100 ? "block" : "none"; // 👈 AGREGADO
+});
+
+// mostrar el de abajo siempre desde el inicio
+btnIrAbajo.style.display = "block";
+
+btnIrAbajo.addEventListener("click", () => {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+});
+document.getElementById("btn-subir-control").addEventListener("click", () => {
+  const clave = prompt("Ingresá la contraseña para subir control:");
+  if (clave !== "120212") {
+    alert("❌ Clave incorrecta");
+    return;
+  }
+
+  document.getElementById("modal-subir-control").style.display = "flex";
+});
+
+function cerrarModalSubirControl() {
+  const form = document.getElementById("form-subir-control");
+  const listaGastos = document.getElementById("lista-gastos");
+
+  if (form) form.reset();
+  if (listaGastos) {
+    listaGastos.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.width = "fit-content";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = "gasto";
+    input.placeholder = "Gasto adicional";
+    input.style.paddingLeft = "20px";
+    input.style.width = "270px";
+
+    const peso = document.createElement("span");
+    peso.textContent = "$";
+    peso.style.position = "absolute";
+    peso.style.left = "8px";
+    peso.style.top = "50%";
+    peso.style.transform = "translateY(-50%)";
+    peso.style.color = "#555";
+    peso.style.fontWeight = "bold";
+
+    wrapper.appendChild(peso);
+    wrapper.appendChild(input);
+    listaGastos.appendChild(wrapper);
+  }
+
+  document.getElementById("modal-subir-control").style.display = "none";
+}
+
+// 👉 AGREGAR GASTO DINÁMICAMENTE
+const listaGastos = document.getElementById("lista-gastos");
+document.getElementById("agregar-gasto").addEventListener("click", () => {
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+  wrapper.style.width = "fit-content";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.name = "gasto";
+  input.placeholder = "Gasto adicional";
+  input.style.paddingLeft = "20px";
+  input.style.width = "270px";
+
+  const peso = document.createElement("span");
+  peso.textContent = "$";
+  peso.style.position = "absolute";
+  peso.style.left = "8px";
+  peso.style.top = "50%";
+  peso.style.transform = "translateY(-50%)";
+  peso.style.color = "#555";
+  peso.style.fontWeight = "bold";
+
+  wrapper.appendChild(peso);
+  wrapper.appendChild(input);
+  listaGastos.appendChild(wrapper);
+});
+
+// 👉 SUBIR CONTROL A LA NUBE
+document.getElementById("form-subir-control").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData(e.target);
+  const cuentas = {};
+  const fichas = {};
+  const gastos = [];
+
+  for (let [key, value] of formData.entries()) {
+    if (key.startsWith("cuenta")) {
+      cuentas[key] = Number(value);
+    } else if (key.startsWith("fichas")) {
+      fichas[key] = Number(value);
+    } else if (key === "gasto") {
+      gastos.push(value.trim());  // ⬅️ no convertir a número, se guarda como texto
+    }
+  }
+
+  const fecha = new Date().toISOString().split("T")[0];
+  const hora_envio = new Date().toISOString();
+
+  console.log("🟡 Enviando a Supabase:", {
+    usuario_id,
+    fecha,
+    hora_envio,
+    cuentas,
+    fichas,
+    gastos
+  });
+  const { error } = await supabase.from("controles_subidos").insert([{
+    usuario_id,
+    fecha,
+    hora_envio,
+    cuentas,
+    fichas,
+    gastos
+  }]);
+
+  if (error) {
+    console.error("❌ Error al subir control:", error);
+    alert("Hubo un error al guardar el control.");
+    return;
+  }
+
+  alert("✅ Control enviado correctamente.");
+  document.getElementById("form-subir-control").reset();
+  cerrarModalSubirControl();
+});
+document.getElementById("agregar-gasto").addEventListener("click", () => {
+  const container = document.getElementById("gastos-container");
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "gasto-wrapper";
+
+  const div = document.createElement("div");
+  div.className = "input-con-signo-largo";
+
+  const span = document.createElement("span");
+  span.textContent = "$";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.name = "gasto";
+
+  div.appendChild(span);
+  div.appendChild(input);
+  wrapper.appendChild(div);
+  container.appendChild(wrapper);
+});
