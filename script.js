@@ -1355,3 +1355,21 @@ document.getElementById("agregar-gasto").addEventListener("click", () => {
   wrapper.appendChild(div);
   container.appendChild(wrapper);
 });
+document.querySelectorAll("input[type='number'], input[type='text']").forEach((input, i, all) => {
+  input.addEventListener("keydown", (e) => {
+    const inputs = Array.from(document.querySelectorAll("input[type='number'], input[type='text']"));
+    const index = inputs.indexOf(e.target);
+    if (["Enter", "ArrowDown"].includes(e.key)) {
+      e.preventDefault();
+      if (inputs[index + 1]) inputs[index + 1].focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (inputs[index - 1]) inputs[index - 1].focus();
+    }
+  });
+});
+document.getElementById("fechaFiltro")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    document.getElementById("btn-buscar-fecha").click();
+  }
+});
