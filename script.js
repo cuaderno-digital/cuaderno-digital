@@ -21,8 +21,8 @@ const fechaFiltro = document.getElementById("fechaFiltro");
 const fechaHoraDiv = document.getElementById("fecha-hora");
 const cartelEstado = document.getElementById("cartel-estado-turno");
 
-const abrirTurnoBtn = document.getElementById("btn-abrir-turno");
-const cerrarTurnoBtn = document.getElementById("btn-cerrar-turno");
+const btnTurno = document.getElementById("btn-turno");
+
 const formCampos = document.querySelectorAll("#registro-form input, #registro-form button");
 
 let movimientos = [];
@@ -172,6 +172,9 @@ document.getElementById("btn-buscar-fecha").addEventListener("click", () => {
       }
       movimientos = data;
       mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
+      if (pestañaActiva === "bono") {
+        cargarBonosDesdeNube();
+      }
     });
 });
 
@@ -346,7 +349,7 @@ function resaltarFilasEliminables() {
   Array.from(tabla.rows).forEach((row) => {
     const index = parseInt(row.dataset.index);
     const mov = movimientos[index];
-    if (!mov || mov.tipo === "turno" || mov.tipo === "separador") return;
+    if (!mov || ["turno", "separador", "bono"].includes(mov.tipo)) return;
 
     const movHora = new Date(mov.hora);
     const minutos = (ahora - movHora) / 1000 / 60;
@@ -366,7 +369,7 @@ tabla.addEventListener("click", async (e) => {
 
   const index = parseInt(fila.dataset.index);
   const mov = movimientos[index];
-  if (!mov || mov.tipo === "turno" || mov.tipo === "separador") return;
+  if (!mov || ["turno", "separador", "bono"].includes(mov.tipo)) return;
 
   if (modoEliminar) {
     const ahora = new Date();
@@ -454,31 +457,22 @@ tabla.addEventListener("click", async (e) => {
 });
 
 
-// ✅ Botón ABRIR TURNO con modal
-abrirTurnoBtn.addEventListener("click", () => {
+btnTurno.addEventListener("click", () => {
   if (turnoAbierto) {
-    alert("El turno ya está abierto.");
-    return;
+    // 🔴 Cerrar turno
+    turnoAbierto = false;
+    localStorage.setItem("turnoAbierto", false);
+    habilitarFormulario(false);
+    actualizarCartelTurno();
+    agregarFilaTurno("TURNO CERRADO");
+    document.getElementById("btn-pendiente").disabled = true;
+    btnTurno.textContent = "Abrir Turno";
+  } else {
+    // 🟢 Abrir turno con modal
+    document.getElementById("modal-turno").style.display = "flex";
+    document.getElementById("input-turno-nombre").value = "";
+    setTimeout(() => document.getElementById("input-turno-nombre").focus(), 100);
   }
-  document.getElementById("modal-turno").style.display = "flex";
-  document.getElementById("input-turno-nombre").value = "";
-  setTimeout(() => document.getElementById("input-turno-nombre").focus(), 100);
-});
-
-
-// ✅ Botón CERRAR TURNO
-cerrarTurnoBtn.addEventListener("click", () => {
-  if (!turnoAbierto) {
-    alert("El turno ya está cerrado.");
-    return;
-  }
-
-  turnoAbierto = false;
-  localStorage.setItem("turnoAbierto", false);
-  habilitarFormulario(turnoAbierto);
-actualizarCartelTurno();
-  agregarFilaTurno("TURNO CERRADO");
-  document.getElementById("btn-pendiente").disabled = true;
 });
 
 const btnModoBono = document.getElementById("btn-bono");
@@ -513,6 +507,8 @@ const btnModoBono = document.getElementById("btn-bono");
   }
 
   turnoAbierto = await verificarTurnoAbiertoDesdeNube();
+  btnTurno.textContent = turnoAbierto ? "Cerrar Turno" : "Abrir Turno";
+  btnControl.textContent = modoControl ? "Cerrar Control" : "Hacer Control";
   mostrarMovimientosDelDia();
   habilitarFormulario(turnoAbierto);
   actualizarCartelTurno();
@@ -520,8 +516,7 @@ const btnModoBono = document.getElementById("btn-bono");
 })();
 
 // 🔒 Agregamos referencias para botones de control
-const btnHacerControl = document.getElementById("btn-hacer-control");
-const btnTerminarControl = document.getElementById("btn-terminar-control");
+const btnControl = document.getElementById("btn-control");
 
 // 🔶 Pendientes (desde Supabase)
 let pendientes = [];
@@ -736,33 +731,29 @@ cruzado.addEventListener("click", async () => {
 
 
 // 🔒 Botón para activar control
-btnHacerControl.addEventListener("click", () => {
+btnControl.addEventListener("click", async () => {
   if (modoControl) {
-    alert("El control ya está en curso.");
-    return;
-  }
-
-  const clave = prompt("Ingresá la contraseña de control:");
-  if (clave === "120212") {
-    modoControl = true;
+    // 🔴 Cerrar control
+    modoControl = false;
+    await agregarFilaSeparador();
     mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
-    alert("Modo control activado");
-  } else {
-    alert("Contraseña incorrecta");
-  }
-});
-
-// 🔒 Botón para finalizar control
-btnTerminarControl.addEventListener("click", async () => {
-  if (!modoControl) {
-    alert("No hay ningún control en curso para finalizar.");
+    btnControl.textContent = "Hacer Control";
+    btnControl.classList.remove("amarillo");
     return;
   }
 
-  modoControl = false;
-  alert("Control finalizado. Todo queda guardado.");
-  await agregarFilaSeparador();
+  // 🟢 Abrir control
+  const clave = prompt("Ingresá la contraseña de control:");
+  if (!clave) return; // si tocás cancelar, no hace nada
+  if (clave !== "120212") {
+    alert("Clave incorrecta");
+    return;
+  }
+
+  modoControl = true;
   mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
+  btnControl.textContent = "Cerrar Control";
+  btnControl.classList.add("amarillo");
 });
 
 // 🔒 Función para guardar en la nube
@@ -810,6 +801,7 @@ btnConsultar.addEventListener("click", () => {
   if (modoConsulta) return; // Evita doble entrada
 
   const clave = prompt("Ingresá la clave de consulta:");
+  if (clave === null || clave.trim() === "") return; // no hace nada si se cancela o deja vacío
   if (clave !== "1709") {
     alert("Clave incorrecta");
     return;
@@ -873,7 +865,12 @@ document.getElementById("btn-cerrar-consulta").addEventListener("click", () => {
 function cerrarModalTurno() {
   document.getElementById("modal-turno").style.display = "none";
 }
-
+document.getElementById("input-turno-nombre").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    confirmarAbrirTurno();
+  }
+});
 function confirmarAbrirTurno() {
   const nombre = document.getElementById("input-turno-nombre").value.trim();
   if (!nombre) return;
@@ -885,6 +882,7 @@ function confirmarAbrirTurno() {
   agregarFilaTurno(`TURNO ABIERTO POR: ${nombre.toUpperCase()}`);
   document.getElementById("btn-pendiente").disabled = false;
   cerrarModalTurno();
+  btnTurno.textContent = "Cerrar Turno";
 }
 // 🟨 Exponer funciones del modal de apertura
 window.cerrarModalTurno = cerrarModalTurno;
@@ -954,7 +952,7 @@ let modoBono = false;
 // 👉 Crear solapas dinámicamente (inicialmente ocultas)
 const tabsBonos = document.createElement("div");
 tabsBonos.id = "tabs-bonos";
-tabsBonos.style.display = "none";
+tabsBonos.style.display = "flex";
 tabsBonos.style.marginLeft = "10px";
 tabsBonos.style.gap = "8px";
 
@@ -966,7 +964,9 @@ tabsBonos.innerHTML = `
 document.querySelector(".filtro-fecha").appendChild(tabsBonos);
 
 // 👉 Eventos para alternar pestañas
+// 👉 Eventos para alternar pestañas
 let pestañaActiva = "normal";
+
 document.addEventListener("click", (e) => {
   if (e.target.id === "tab-normal") {
     pestañaActiva = "normal";
@@ -977,6 +977,13 @@ document.addEventListener("click", (e) => {
     // Mostrar tabla normal, ocultar bono
     document.getElementById("tabla-registros").style.display = "table";
     document.getElementById("tabla-bonos").style.display = "none";
+
+    // ✅ Solapa 1: habilitar si turno abierto
+    if (turnoAbierto) {
+      habilitarFormulario(true);
+    } else {
+      habilitarFormulario(false);
+    }
   }
 
   if (e.target.id === "tab-bono") {
@@ -984,12 +991,15 @@ document.addEventListener("click", (e) => {
     document.getElementById("registro-form").dataset.tab = "bono";
     document.getElementById("tab-bono").classList.add("activo-tab");
     document.getElementById("tab-normal").classList.remove("activo-tab");
-
+  
     // Mostrar tabla bono, ocultar la normal
     document.getElementById("tabla-registros").style.display = "none";
     document.getElementById("tabla-bonos").style.display = "table";
-
+  
     mostrarTablaBonos();
+  
+    // ✅ Solapa 2: bloquear si el bono no está activo
+    habilitarFormulario(modoBono);
   }
 });
 
@@ -997,13 +1007,27 @@ document.addEventListener("click", (e) => {
 btnModoBono.addEventListener("click", async () => {
   if (!modoBono) {
     const clave = prompt("Clave para activar BONO:");
+    if (clave === null || clave.trim() === "") return;
     if (clave !== "120212") {
       alert("Clave incorrecta.");
       return;
     }
 
+    const titulo = prompt("📌 Ingresá un nombre para este bono (ej: 100% Bonificación):");
+    if (titulo === null || titulo.trim().length === 0) return;
+    localStorage.setItem("titulo_bono", titulo.trim());
+
+    // 👉 Mostrar el título en el campo de 'usuario' como marcador
+    const inputUsuario = document.getElementById("usuario");
+// ✅ Mostrar el título como pista, sin bloquear el input
+inputUsuario.placeholder = "Usuario o Gasto";
+inputUsuario.value = "";
+inputUsuario.disabled = false;
+
     modoBono = true;
     await guardarEstadoBonoEnNube(true);
+    
+await cargarBonosDesdeNube(); // 🔄 Mostrar la tabla con el título apenas se activa
     btnModoBono.textContent = "Terminar Bono";
     document.getElementById("registro-form").dataset.tab = "bono";
     pestañaActiva = "bono";
@@ -1023,35 +1047,42 @@ btnModoBono.addEventListener("click", async () => {
         usuario: "BONO",
         usuario_id,
         monto: total,
-        observacion: "desde modo bono",
+        observacion: localStorage.getItem("titulo_bono") || "desde modo bono",
         hora: new Date().toISOString(),
         color: "amarillo",
         tipo: "bono"
       };
 
       const { error } = await supabase.from("movimientos").insert([bonoFinal]);
-      if (error) {
-        alert("❌ Error al guardar el bono en la nube.");
-        console.error("Error Supabase:", error);
-        return;
-      }
-      // 🔥 Borrar todos los bonos temporales de la nube de este usuario
-await supabase
+      // 🔒 Desactivar bonos anteriores
+const { error: errorDesactivar } = await supabase
 .from("bonos_temp")
 .update({ activo: false })
 .eq("usuario_id", usuario_id)
 .eq("activo", true);
 
+if (errorDesactivar) {
+console.error("❌ Error al desactivar bonos anteriores:", errorDesactivar);
+}
+      if (error) {
+        alert("❌ Error al guardar el bono en la nube.");
+        console.error("Error Supabase:", error);
+        return;
+      }
+
       alert(`✅ Bono registrado por $${total.toLocaleString("es-AR")}`);
     }
-
+    localStorage.removeItem("titulo_bono");
+    document.getElementById("usuario").disabled = false;
+    document.getElementById("usuario").placeholder = "Usuario o Gasto";
+    document.getElementById("usuario").value = "";
     // 🔄 Resetear todo
     modoBono = false;
     await guardarEstadoBonoEnNube(false);
     listaBonos = [];
     btnModoBono.textContent = "Modo Bono";
     pestañaActiva = "normal";
-    tabsBonos.style.display = "none";
+    tabsBonos.style.display = "flex";
     document.getElementById("registro-form").dataset.tab = "normal";
     document.getElementById("tab-normal").classList.add("activo-tab");
     document.getElementById("tab-bono").classList.remove("activo-tab");
@@ -1069,40 +1100,85 @@ function mostrarTablaBonos() {
   const cuerpo = tablaBono.querySelector("tbody");
   cuerpo.innerHTML = "";
 
-  listaBonos.forEach((bono, index) => {
-    const ahora = new Date();
-    const horaBono = new Date(bono.hora);
-    const minutos = (ahora - horaBono) / 60000;
-    const puedeBorrar = minutos <= 5;
-
-    const row = document.createElement("tr");
-    row.dataset.index = index;
-    row.innerHTML = `
-      <td>${bono.usuario}</td>
-      <td>$${Number(bono.monto).toLocaleString("es-AR")}</td>
-      <td>${bono.observacion || ""}</td>
-      <td>${horaBono.toLocaleTimeString("es-AR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-      })}</td>
-    `;
-
-    // 👉 destacar si está en modo eliminar y se puede borrar
-    if (modoEliminar && puedeBorrar) {
-      row.classList.add("fila-eliminable");
-      row.style.cursor = "pointer";
+  if (listaBonos.length === 0) {
+    if (modoBono) {
+      const tituloBono = localStorage.getItem("titulo_bono") || "BONO ACTIVO";
+      const filaTitulo = document.createElement("tr");
+      filaTitulo.innerHTML = `
+        <td colspan="4" style="
+          text-align: center;
+          font-weight: bold;
+          font-size: 1.1rem;
+          color: gold;
+          background: #111;
+          padding: 8px 12px;
+          border: 2px solid red;
+        ">🎁 ${tituloBono.toUpperCase()}</td>
+      `;
+      cuerpo.appendChild(filaTitulo);
     } else {
-      row.classList.remove("fila-eliminable");
-      row.style.cursor = "";
+      cuerpo.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#aaa;">(No hay bonos activos ni anteriores en esta fecha)</td></tr>`;
     }
+    return;
+  }
 
-    cuerpo.appendChild(row);
+  // ✅ Agrupar bonos por título
+  const bonosAgrupados = {};
+  listaBonos.forEach(b => {
+    const titulo = (b.titulo || "SIN TÍTULO").toUpperCase();
+    if (!bonosAgrupados[titulo]) bonosAgrupados[titulo] = [];
+    bonosAgrupados[titulo].push(b);
+  });
+
+  // 🔁 Mostrar cada grupo
+  Object.entries(bonosAgrupados).forEach(([titulo, grupo]) => {
+    // 🟨 Fila de título del bono
+    const filaTitulo = document.createElement("tr");
+    filaTitulo.innerHTML = `
+      <td colspan="4" style="
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.1rem;
+        color: gold;
+        background: #111;
+        padding: 8px 12px;
+        border: 2px solid red;
+      ">🎁 ${titulo}</td>
+    `;
+    cuerpo.appendChild(filaTitulo);
+
+    grupo.forEach((bono, index) => {
+      const horaBono = new Date(bono.hora);
+      const minutos = (new Date() - horaBono) / 60000;
+      const puedeBorrar = minutos <= 5;
+
+      const row = document.createElement("tr");
+      row.dataset.index = index;
+
+      row.innerHTML = `
+        <td>${bono.usuario}</td>
+        <td>$${Number(bono.monto).toLocaleString("es-AR")}</td>
+        <td>${bono.observacion || ""}</td>
+        <td>${horaBono.toLocaleTimeString("es-AR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        })}</td>
+      `;
+
+      if (modoEliminar && puedeBorrar && modoBono) {
+        row.classList.add("fila-eliminable");
+        row.style.cursor = "pointer";
+      }
+
+      cuerpo.appendChild(row);
+    });
   });
 }
 let listaBonos = [];
 
 async function guardarBonoEnNube(bono) {
+  bono.titulo = localStorage.getItem("titulo_bono") || "SIN TÍTULO";
   const { error } = await supabase.from("bonos_temp").insert([bono]);
   if (error) {
     console.error("❌ ERROR al guardar bono temporal:", JSON.stringify(error, null, 2));
@@ -1112,20 +1188,50 @@ async function guardarBonoEnNube(bono) {
 }
 
 async function cargarBonosDesdeNube() {
+  // Si hay bono activo, solo mostramos lo actual
+  if (modoBono) {
+    const { data, error } = await supabase
+      .from("bonos_temp")
+      .select("*")
+      .eq("usuario_id", usuario_id)
+      .eq("activo", true)
+      .order("hora", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar bonos activos:", error);
+      return;
+    }
+
+    listaBonos = data;
+    mostrarTablaBonos();
+    // Forzar scroll hacia tabla bono si se acaba de activar
+setTimeout(() => {
+  document.getElementById("tabla-bonos")?.scrollIntoView({ behavior: "smooth" });
+}, 200);
+    return;
+  }
+
+  // Si no hay bono activo, mostrar bonos anteriores según la fecha seleccionada
+  const fechaSeleccionada = fechaFiltro.value;
+  const inicio = new Date(`${fechaSeleccionada}T00:00:00`).toISOString();
+  const fin = new Date(`${fechaSeleccionada}T23:59:59`).toISOString();
+
   const { data, error } = await supabase
     .from("bonos_temp")
     .select("*")
     .eq("usuario_id", usuario_id)
-    .eq("activo", true)
+    .eq("activo", false)
+    .gte("hora", inicio)
+    .lte("hora", fin)
     .order("hora", { ascending: true });
 
   if (error) {
-    console.error("Error al cargar bonos:", error);
+    console.error("Error al cargar bonos finalizados:", error);
     return;
   }
 
   listaBonos = data;
-  if (modoBono) mostrarTablaBonos();
+  mostrarTablaBonos();
 }
 
 async function eliminarBono(index) {
@@ -1208,6 +1314,12 @@ btnIrAbajo.addEventListener("click", () => {
 });
 document.getElementById("btn-subir-control").addEventListener("click", () => {
   const clave = prompt("Ingresá la contraseña para subir control:");
+  
+  if (clave === null || clave.trim() === "") {
+    // Si cancela o no escribe nada, no muestra error
+    return;
+  }
+
   if (clave !== "120212") {
     alert("❌ Clave incorrecta");
     return;
@@ -1371,5 +1483,32 @@ document.querySelectorAll("input[type='number'], input[type='text']").forEach((i
 document.getElementById("fechaFiltro")?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     document.getElementById("btn-buscar-fecha").click();
+  }
+});
+// 🔍 Filtrar resultados por usuario en vivo
+document.getElementById("input-buscar-usuario").addEventListener("input", () => {
+  const texto = document.getElementById("input-buscar-usuario").value.toLowerCase();
+
+  if (pestañaActiva === "normal") {
+    Array.from(document.querySelectorAll("#tabla-registros tbody tr")).forEach((fila) => {
+      const usuario = fila.children[0]?.textContent?.toLowerCase() || "";
+      fila.style.display = usuario.includes(texto) ? "" : "none";
+    });
+  }
+
+  if (pestañaActiva === "bono") {
+    Array.from(document.querySelectorAll("#tabla-bonos tbody tr")).forEach((fila) => {
+      const columnas = fila.querySelectorAll("td");
+      const textoFila = Array.from(columnas).map(td => td.textContent.toLowerCase()).join(" ");
+      const esSeparador = columnas.length === 1 || fila.innerText.includes("🎁");
+
+      // Siempre mostrar separadores con título
+      if (esSeparador) {
+        fila.style.display = "";
+        return;
+      }
+
+      fila.style.display = textoFila.includes(texto) ? "" : "none";
+    });
   }
 });

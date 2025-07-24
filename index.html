@@ -17,10 +17,8 @@
 
     <div class="top-header">
       <div class="turno-buttons">
-        <button id="btn-abrir-turno">Abrir Turno</button>
-        <button id="btn-cerrar-turno">Cerrar Turno</button>
-        <button id="btn-hacer-control">Hacer Control</button>
-        <button id="btn-terminar-control">Cerrar Control</button>
+        <button id="btn-turno">Abrir Turno</button>
+        <button id="btn-control">Hacer Control</button>
         <button id="btn-subir-control">Subir Control</button>
         <button id="btn-bono" class="boton-amarillo">Modo Bono</button>
         <button id="consultar" class="btn-accion">Consultar</button>
@@ -108,6 +106,18 @@
         <button id="btn-buscar-fecha">Buscar</button>
       </div>
       <div class="marcadores">
+        <input type="text" name="fake-user2" style="display:none;" autocomplete="off">
+<input type="password" name="fake-pass2" style="display:none;" autocomplete="new-password">
+        <input
+  type="text"
+  id="input-buscar-usuario"
+  placeholder="🔍 Buscar usuario..."
+  style="margin: 0 10px; padding: 8px 10px; border-radius: 8px; border: none; font-size: 18px; width: 160px;"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false"
+/>
   <button type="button" id="marcar-gasto" class="btn-marcar amarillo">Marcar Gasto</button>
   <button type="button" id="marcar-st" class="btn-marcar rojo">Marcar ST</button>
   <button type="button" id="modo-eliminar" class="btn-marcar basura">🗑️ Eliminar</button>
@@ -155,9 +165,33 @@
     <h2 style="color:gold;">🟨 ABRIR TURNO</h2>
     <p style="margin-top: 10px;">¿Quién abre el turno?</p>
     <input id="input-turno-nombre" type="text" placeholder="Nombre..." style="margin-top:10px; padding:8px; width:90%; max-width:280px; border-radius:8px; border:none; font-size:1rem;">
-    <div style="margin-top:20px;">
-      <button onclick="cerrarModalTurno()" style="margin-right: 10px; padding:8px 16px; background:#666; border:none; border-radius:6px; color:white;">Cancelar</button>
+    <div style="margin-top:20px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+      <button onclick="cerrarModalTurno()" style="padding:8px 16px; background:#666; border:none; border-radius:6px; color:white;">Cancelar</button>
       <button onclick="confirmarAbrirTurno()" style="padding:8px 16px; background:gold; border:none; border-radius:6px; color:black; font-weight:bold;">Abrir</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL CLAVE DE CONTROL -->
+<div id="modal-clave-control" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+  <div style="background:#222; padding:25px; border:2px solid gold; border-radius:12px; color:white; font-size:1.1rem; max-width:400px; text-align:center;">
+    <h2 style="color:gold;">🔒 CLAVE DE CONTROL</h2>
+    <p style="margin-top:10px;">Ingresá la contraseña de control:</p>
+    <!-- Inputs trampa para evitar autocompletado -->
+<input type="text" name="fake-user" style="display:none;" autocomplete="off">
+<input type="password" name="fake-pass" style="display:none;" autocomplete="new-password">
+    <input
+      id="input-clave-control"
+      type="password"
+      placeholder="Contraseña..."
+      autocomplete="new-password"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      style="margin-top:10px; padding:8px; width:90%; max-width:280px; border-radius:8px; border:none; font-size:1rem;"
+    >
+    <div style="margin-top:20px; display: flex; justify-content: center; gap: 10px;">
+      <button onclick="cerrarModalClaveControl()" style="padding:8px 16px; background:#666; border:none; border-radius:6px; color:white;">Cancelar</button>
+      <button onclick="confirmarClaveControl()" style="padding:8px 16px; background:gold; border:none; border-radius:6px; color:black; font-weight:bold;">Aceptar</button>
     </div>
   </div>
 </div>
