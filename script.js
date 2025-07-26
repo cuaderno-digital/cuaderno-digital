@@ -263,6 +263,18 @@ async function verificarTurnoAbiertoDesdeNube() {
 
   return abierto;
 }
+async function verificarEstadoControlDesdeNube() {
+  const fecha = fechaFiltro.value;
+  const { data, error } = await supabase
+    .from("estado_control")
+    .select("estado")
+    .eq("usuario_id", usuario_id)
+    .eq("fecha", fecha)
+    .single();
+
+  if (error || !data) return false; // Por defecto, cerrado
+  return data.estado === true;
+}
 // ✅ Mostrar todo lo del día al cargar
 function mostrarMovimientosDelDia() {
   const hoy = new Date();
@@ -457,9 +469,14 @@ tabla.addEventListener("click", async (e) => {
 });
 
 
-btnTurno.addEventListener("click", () => {
+btnTurno.addEventListener("click", async () => {
   if (turnoAbierto) {
-    // 🔴 Cerrar turno
+    const yaAbierto = await verificarTurnoAbiertoDesdeNube();
+    if (!yaAbierto) {
+      alert("⚠️ El turno ya está cerrado.");
+      return;
+    }
+
     turnoAbierto = false;
     localStorage.setItem("turnoAbierto", false);
     habilitarFormulario(false);
@@ -468,10 +485,16 @@ btnTurno.addEventListener("click", () => {
     document.getElementById("btn-pendiente").disabled = true;
     btnTurno.textContent = "Abrir Turno";
   } else {
-    // 🟢 Abrir turno con modal
-    document.getElementById("modal-turno").style.display = "flex";
-    document.getElementById("input-turno-nombre").value = "";
-    setTimeout(() => document.getElementById("input-turno-nombre").focus(), 100);
+    verificarTurnoAbiertoDesdeNube().then((yaAbierto) => {
+      if (yaAbierto) {
+        alert("⚠️ Ya hay un turno abierto hoy.");
+        return;
+      }
+
+      document.getElementById("modal-turno").style.display = "flex";
+      document.getElementById("input-turno-nombre").value = "";
+      setTimeout(() => document.getElementById("input-turno-nombre").focus(), 100);
+    });
   }
 });
 
@@ -481,19 +504,31 @@ const btnModoBono = document.getElementById("btn-bono");
 (async () => {
   actualizarFechaHora();
   setFechaActualEnFiltro();
-  console.log("🟡 INICIO: chequeando estado del bono desde la nube...");
+
+  // 🔁 Cargar el estado desde la nube
+  modoControl = await verificarEstadoControlDesdeNube();
+  console.log("🧪 Estado inicial de modoControl:", modoControl);
+  // 🔁 Cargar los movimientos del día Y estado del control
+  await mostrarMovimientosDelDia();
+
+  // 🔁 Refrescar visual el botón de control según estado
+  btnControl.textContent = modoControl ? "Cerrar Control" : "Hacer Control";
+  btnControl.classList.toggle("amarillo", modoControl);
+
+  if (modoControl) await cargarEstadoControlDesdeNube(fechaFiltro.value);
 
   // ✅ Restaurar modo BONO si quedó activo en la nube
   const { data: estadoBono, error: errorBono } = await supabase
-    .from("estado_bono")
-    .select("*")
-    .eq("usuario_id", usuario_id)
-    .single();
+  .from("estado_bono")
+  .select("*")
+  .eq("usuario_id", usuario_id)
+  .single();
 
-  if (!errorBono && estadoBono?.activo) {
-    console.log("✅ BONO ACTIVO DETECTADO, restaurando visualmente...");
-    modoBono = true;
-    pestañaActiva = "bono";
+if (!errorBono && estadoBono?.activo) {
+  console.log("✅ BONO ACTIVO DETECTADO, restaurando visualmente...");
+  modoBono = true;
+  pestañaActiva = "bono";
+  localStorage.setItem("titulo_bono", estadoBono.titulo || "SIN TÍTULO"); // 👈 esto agrega el título en todas las compus
     btnModoBono.textContent = "Terminar Bono";
     document.getElementById("registro-form").dataset.tab = "bono";
     document.getElementById("tab-bono").classList.add("activo-tab");
@@ -508,14 +543,10 @@ const btnModoBono = document.getElementById("btn-bono");
 
   turnoAbierto = await verificarTurnoAbiertoDesdeNube();
   btnTurno.textContent = turnoAbierto ? "Cerrar Turno" : "Abrir Turno";
-  btnControl.textContent = modoControl ? "Cerrar Control" : "Hacer Control";
-  mostrarMovimientosDelDia();
   habilitarFormulario(turnoAbierto);
   actualizarCartelTurno();
   document.getElementById("btn-pendiente").disabled = !turnoAbierto;
 })();
-
-// 🔒 Agregamos referencias para botones de control
 const btnControl = document.getElementById("btn-control");
 
 // 🔶 Pendientes (desde Supabase)
@@ -735,6 +766,7 @@ btnControl.addEventListener("click", async () => {
   if (modoControl) {
     // 🔴 Cerrar control
     modoControl = false;
+    await guardarEstadoControlEnNube(false);
     await agregarFilaSeparador();
     mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
     btnControl.textContent = "Hacer Control";
@@ -751,6 +783,7 @@ btnControl.addEventListener("click", async () => {
   }
 
   modoControl = true;
+  await guardarEstadoControlEnNube(true);
   mostrarMovimientosDeFecha(new Date(fechaFiltro.value));
   btnControl.textContent = "Cerrar Control";
   btnControl.classList.add("amarillo");
@@ -959,6 +992,7 @@ tabsBonos.style.gap = "8px";
 tabsBonos.innerHTML = `
   <button id="tab-normal" class="tab-bono activo-tab">1</button>
   <button id="tab-bono" class="tab-bono">2</button>
+  <button id="tab-tres" class="tab-bono">3</button>
 `;
 
 document.querySelector(".filtro-fecha").appendChild(tabsBonos);
@@ -970,9 +1004,11 @@ let pestañaActiva = "normal";
 document.addEventListener("click", (e) => {
   if (e.target.id === "tab-normal") {
     pestañaActiva = "normal";
+    document.getElementById("panel-juegos").style.display = "none";
     document.getElementById("registro-form").dataset.tab = "normal";
     document.getElementById("tab-normal").classList.add("activo-tab");
     document.getElementById("tab-bono").classList.remove("activo-tab");
+    document.getElementById("tab-tres").classList.remove("activo-tab");
 
     // Mostrar tabla normal, ocultar bono
     document.getElementById("tabla-registros").style.display = "table";
@@ -988,9 +1024,11 @@ document.addEventListener("click", (e) => {
 
   if (e.target.id === "tab-bono") {
     pestañaActiva = "bono";
+    document.getElementById("panel-juegos").style.display = "none";
     document.getElementById("registro-form").dataset.tab = "bono";
     document.getElementById("tab-bono").classList.add("activo-tab");
     document.getElementById("tab-normal").classList.remove("activo-tab");
+    document.getElementById("tab-tres").classList.remove("activo-tab");
   
     // Mostrar tabla bono, ocultar la normal
     document.getElementById("tabla-registros").style.display = "none";
@@ -1257,10 +1295,20 @@ async function eliminarBono(index) {
 }
 async function guardarEstadoBonoEnNube(activo) {
   const ahora = new Date().toISOString();
+  const titulo = localStorage.getItem("titulo_bono") || "SIN TÍTULO";
+
   await supabase
     .from("estado_bono")
-    .upsert([{ usuario_id, activo, hora_inicio: ahora }], {
+    .upsert([{ usuario_id, activo, hora_inicio: ahora, titulo }], {
       onConflict: ["usuario_id"]
+    });
+}
+async function guardarEstadoControlEnNube(abierto) {
+  const fecha = fechaFiltro.value;
+  await supabase
+    .from("estado_control")
+    .upsert([{ usuario_id, fecha, estado: abierto }], {
+      onConflict: ["usuario_id", "fecha"]
     });
 }
 // ✅ Manejar clic en tabla de bonos para eliminar si está en modoEliminar
@@ -1364,34 +1412,6 @@ function cerrarModalSubirControl() {
   document.getElementById("modal-subir-control").style.display = "none";
 }
 
-// 👉 AGREGAR GASTO DINÁMICAMENTE
-const listaGastos = document.getElementById("lista-gastos");
-document.getElementById("agregar-gasto").addEventListener("click", () => {
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "relative";
-  wrapper.style.width = "fit-content";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.name = "gasto";
-  input.placeholder = "Gasto adicional";
-  input.style.paddingLeft = "20px";
-  input.style.width = "270px";
-
-  const peso = document.createElement("span");
-  peso.textContent = "$";
-  peso.style.position = "absolute";
-  peso.style.left = "8px";
-  peso.style.top = "50%";
-  peso.style.transform = "translateY(-50%)";
-  peso.style.color = "#555";
-  peso.style.fontWeight = "bold";
-
-  wrapper.appendChild(peso);
-  wrapper.appendChild(input);
-  listaGastos.appendChild(wrapper);
-});
-
 // 👉 SUBIR CONTROL A LA NUBE
 document.getElementById("form-subir-control").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1407,11 +1427,21 @@ document.getElementById("form-subir-control").addEventListener("submit", async (
     } else if (key.startsWith("fichas")) {
       fichas[key] = Number(value);
     } else if (key === "gasto") {
-      gastos.push(value.trim());  // ⬅️ no convertir a número, se guarda como texto
+      const partes = value.trim().split(" ");
+      const numero = parseInt(partes[0].replace(/\D/g, ""), 10);
+      const descripcion = partes.slice(1).join(" ");
+      const textoFormateado = isNaN(numero)
+  ? value.trim().replace(/^•\s*/, "")
+  : `$${numero.toLocaleString("es-AR")}` + (descripcion ? ` ${descripcion}` : "");
+      gastos.push(textoFormateado);
     }
   }
 
-  const fecha = new Date().toISOString().split("T")[0];
+  const fecha = new Date().toLocaleDateString("es-AR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).split("/").reverse().join("-");
 const hora_envio = new Date().toLocaleTimeString("es-AR", {
   hour: "2-digit",
   minute: "2-digit",
@@ -1511,4 +1541,23 @@ document.getElementById("input-buscar-usuario").addEventListener("input", () => 
       fila.style.display = textoFila.includes(texto) ? "" : "none";
     });
   }
+});
+document.getElementById("tab-tres").addEventListener("click", () => {
+  pestañaActiva = "tres";
+
+  // Activar visual el botón 3
+  document.getElementById("tab-tres").classList.add("activo-tab");
+  document.getElementById("tab-normal").classList.remove("activo-tab");
+  document.getElementById("tab-bono").classList.remove("activo-tab");
+
+  // Mostrar el panel de juegos si existe
+  const panel = document.getElementById("panel-juegos");
+  if (panel) panel.style.display = "block";
+
+  // Ocultar tablas normales
+  document.getElementById("tabla-registros").style.display = "none";
+  document.getElementById("tabla-bonos").style.display = "none";
+
+  // Bloquear el form
+  habilitarFormulario(false);
 });

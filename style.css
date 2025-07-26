@@ -520,3 +520,44 @@ th, td {
   color: black;
   box-shadow: 0 0 8px gold;
 }
+#panel-juegos {
+  margin-top: 12px;
+  padding: 20px;
+  background-color: #111;
+  border: 2px solid gold;
+  border-radius: 10px;
+  color: white;
+  font-family: sans-serif;
+  max-width: 95%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-juegos input,
+#panel-juegos select,
+#panel-juegos button {
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+}
+
+#panel-juegos table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+#panel-juegos th,
+#panel-juegos td {
+  padding: 8px;
+  text-align: center;
+  border: 1px solid #333;
+}
+
+#resumen-juegos {
+  margin-top: 12px;
+  font-weight: bold;
+  color: #FFD700;
+}
