@@ -51,14 +51,14 @@ const SUPABASES = {
     key: ""
   },
   2326: {
-    nombre: "PRÓXIMAMENTE",
-    url: "",
-    key: ""
+    nombre: "CASINO GAUCHITO",
+    url: "https://wpoutjkljkrbliikazkh.supabase.co",
+    key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indwb3V0amtsamtyYmxpaWthemtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5ODAxMjAsImV4cCI6MjA2ODU1NjEyMH0.8aZys2dBiNbLis7ls7ZwiBt25eWbsSvSzjpO21Al2r8"
   },
   2327: {
-    nombre: "PRÓXIMAMENTE",
-    url: "",
-    key: ""
+    nombre: "CASINO KIAMA",
+    url: "https://wpoutjkljkrbliikazkh.supabase.co",
+    key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indwb3V0amtsamtyYmxpaWthemtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5ODAxMjAsImV4cCI6MjA2ODU1NjEyMH0.8aZys2dBiNbLis7ls7ZwiBt25eWbsSvSzjpO21Al2r8"
   },
 
 };
