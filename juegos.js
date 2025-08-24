@@ -132,7 +132,15 @@ if (btnJuegos) {
 
 // 🔢 Data logic
 let registros = [];
-
+// === Inferencia de juego (global) ===
+function getJuegoInferido(casinoTxt) {
+  const txt = (casinoTxt || "").toUpperCase();
+  if (txt.includes("CARTAS")) return "cartas";
+  if (txt.includes("PREGUNTADOS")) return "trivia";
+  if (txt.includes("MAYOR") || txt.includes("MENOR")) return "mayor_menor";
+  if (txt.includes("DADOS")) return "dados";
+  return "ruleta"; // default
+}
 async function cargarRegistros() {
   if (!client) {
     document.getElementById("resultTable").innerHTML = `
@@ -185,18 +193,23 @@ function filtrarRegistros() {
   const fechaSeleccionada = document.getElementById('dateFilter').value;
 
   return registros.filter(reg => {
-    const casinoTxt = reg.casino?.toUpperCase().trim() || "";
-    const [casinoBase] = casinoTxt.split(" - ");
-    reg.casinoNormalizado = casinoBase;
-    reg.juegoInferido = casinoTxt.includes("CARTAS") ? "cartas" : "ruleta";
+  const casinoTxt = reg.casino?.toUpperCase().trim() || "";
+  const [casinoBase] = casinoTxt.split(" - ");
+  reg.casinoNormalizado = casinoBase;
+  reg.juegoInferido = getJuegoInferido(casinoTxt);
 
-    return (
-      (!search || reg.usuario?.toLowerCase().includes(search)) &&
-      (!casinoSeleccionado || reg.casinoNormalizado === casinoSeleccionado) &&
-      (!juegoSeleccionado || reg.juegoInferido === juegoSeleccionado) &&
-      (!fechaSeleccionada || convertirFechaISOArgentina(reg.hora) === fechaSeleccionada)
-    );
-  });
+  // ✅ calcular esto ANTES del return
+  const tieneSoloHora =
+    typeof reg.hora === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(reg.hora);
+
+  return (
+    (!search || reg.usuario?.toLowerCase().includes(search)) &&
+    (!casinoSeleccionado || reg.casinoNormalizado === casinoSeleccionado) &&
+    (!juegoSeleccionado || reg.juegoInferido === juegoSeleccionado) &&
+    // Si solo hay hora (HH:mm[:ss]), NO se excluye por fecha
+    (!fechaSeleccionada || tieneSoloHora || convertirFechaISOArgentina(reg.hora) === fechaSeleccionada)
+  );
+});
 }
 async function recargarPanelJuegos() {
   await cargarRegistros();
@@ -238,22 +251,26 @@ function renderTable() {
   const tbody = document.getElementById('resultTable');
 
   const filtrados = registros.filter(reg => {
-    const casinoTxt = reg.casino?.toUpperCase().trim() || "";
+  const casinoTxt = reg.casino?.toUpperCase().trim() || "";
 
-// 🔍 Extraer nombre del casino (antes del guion si existe)
-const [casinoBase] = casinoTxt.split(" - "); // separa "CASINO ORO – CARTAS"
-reg.casinoNormalizado = casinoBase; // por ej: "CASINO ORO"
+  // 🔍 Extraer nombre del casino (antes del guion si existe)
+  const [casinoBase] = casinoTxt.split(" - "); // separa "CASINO ORO – CARTAS"
+  reg.casinoNormalizado = casinoBase; // por ej: "CASINO ORO"
 
-// 🃏 Detectar tipo de juego
-reg.juegoInferido = casinoTxt.includes("CARTAS") ? "cartas" : "ruleta";
+  // 🃏 Detectar tipo de juego
+  reg.juegoInferido = getJuegoInferido(casinoTxt);
 
-    return (
-      (!search || reg.usuario?.toLowerCase().includes(search)) &&
-      (!casinoSeleccionado || reg.casinoNormalizado === casinoSeleccionado) &&
-      (!juegoSeleccionado || reg.juegoInferido === juegoSeleccionado) &&
-      (!fechaSeleccionada || convertirFechaISOArgentina(reg.hora) === fechaSeleccionada)
-    );
-  });
+  // ✅ calcular esto ANTES del return
+  const tieneSoloHora =
+    typeof reg.hora === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(reg.hora);
+
+  return (
+    (!search || reg.usuario?.toLowerCase().includes(search)) &&
+    (!casinoSeleccionado || reg.casinoNormalizado === casinoSeleccionado) &&
+    (!juegoSeleccionado || reg.juegoInferido === juegoSeleccionado) &&
+    (!fechaSeleccionada || tieneSoloHora || convertirFechaISOArgentina(reg.hora) === fechaSeleccionada)
+  );
+});
 
   tbody.innerHTML = filtrados.length
   ? filtrados.map(reg => {
@@ -285,12 +302,19 @@ function llenarOpcionesCasino() {
 
 function llenarOpcionesJuego() {
   const select = document.getElementById('juegoFilter');
-  const juegos = ["cartas", "ruleta"];
-  select.options.length = 1;
+  const juegos = ["ruleta", "cartas", "trivia", "mayor_menor", "dados"];
+  const labels = {
+    ruleta: "🎯 Ruleta",
+    cartas: "🃏 Cartas",
+    trivia: "❓ Preguntados",
+    mayor_menor: "⬆️⬇️ Mayor o Menor",
+    dados: "🎲 Dados"
+  };
+  select.options.length = 1; // deja "Todos los Juegos"
   juegos.forEach(j => {
     const opt = document.createElement('option');
     opt.value = j;
-    opt.textContent = j === 'cartas' ? '🃏 Cartas' : '🌡 Ruleta';
+    opt.textContent = labels[j];
     select.appendChild(opt);
   });
 }
@@ -347,11 +371,13 @@ const mostrarSeccion = (seccion) => {
   tablaBonos.style.display = seccion === "bonos" ? "table" : "none";
 };
 
-document.getElementById("btn-juegos").addEventListener("click", () => mostrarSeccion("juegos"));
-document.getElementById("btn-turno").addEventListener("click", () => mostrarSeccion("registros"));
-document.getElementById("btn-control").addEventListener("click", () => mostrarSeccion("registros"));
-document.getElementById("btn-subir-control").addEventListener("click", () => mostrarSeccion("registros"));
-document.getElementById("btn-bono").addEventListener("click", () => mostrarSeccion("bonos"));
+const bind = (id, fn) => document.getElementById(id)?.addEventListener("click", fn);
+
+bind("btn-juegos",        () => mostrarSeccion("juegos"));
+bind("btn-turno",         () => mostrarSeccion("registros"));
+bind("btn-control",       () => mostrarSeccion("registros"));
+bind("btn-subir-control", () => mostrarSeccion("registros"));
+bind("btn-bono",          () => mostrarSeccion("bonos"));
 // 🔁 Ocultar panel-juegos si se tocan las otras solapas
 ["btn-control", "btn-subir-control", "btn-turno", "btn-bono", "consultar", "cerrar-sesion"].forEach(id => {
   const boton = document.getElementById(id);
