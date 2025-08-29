@@ -130,8 +130,164 @@ if (btnJuegos) {
   if (btn) btn.addEventListener("click", () => div.style.display = "none");
 });
 
+// === Zona y helpers de fecha/hora (solo panel) ===
+const TZ_AR = "America/Argentina/Buenos_Aires";
+
+// Devuelve un Date válido o null según reglas:
+// - ISO con Z u offset  -> usar directo
+// - "YYYY-MM-DD HH:mm[:ss[.mmm]]" (sin TZ) -> tratar como UTC
+// - Pirata/Genesis: fecha (date) + hora "HH:mm[:ss]" -> construir AR (-03:00)
+function parseRegistroFecha(reg) {
+  const h = reg?.hora;
+  const f = reg?.fecha; // algunas tablas lo traen como 'date'
+
+  if (h instanceof Date && !isNaN(h)) return h;
+  if (h == null && f == null) return null;
+
+  // 0) Epoch numérico (ms o s)
+  if (typeof h === "number" && isFinite(h)) {
+    const ms = h > 1e12 ? h : h * 1000;
+    const d = new Date(ms);
+    return isNaN(d) ? null : d;
+  }
+
+  // Normalizar string
+  if (typeof h === "string") {
+    const hs = h.trim();
+
+    // A) ISO con Z u offset
+    if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+\-]\d{2}:\d{2})$/.test(hs)) {
+      const d = new Date(hs);
+      return isNaN(d) ? null : d;
+    }
+
+    // B) ISO sin zona: YYYY-MM-DDTHH:mm[:ss[.fff]]
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(hs)) {
+      const d = new Date(hs + "Z"); // tratar como UTC
+      return isNaN(d) ? null : d;
+    }
+
+    // C) Postgres timestamp sin zona: "YYYY-MM-DD HH:mm[:ss[.mmm]]"
+if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(hs)) {
+  const casinoTxt = (reg?.casino || "").toUpperCase();
+  const juego = getJuegoInferido(casinoTxt);
+  const [ymd, hmsRaw] = hs.split(/\s+/);
+  const hms = /^\d{2}:\d{2}$/.test(hmsRaw) ? hmsRaw + ":00" : hmsRaw;
+
+  let d;
+
+  if (juego === "cartas" || juego === "ruleta") {
+    // Estos ya te quedaban bien como UTC
+    d = new Date(`${ymd}T${hms}Z`);
+  } else {
+    // Para MAYOR/MENOR, DADOS, PREGUNTADOS -> tomar UTC y SUMAR +3h
+    d = new Date(`${ymd}T${hms}Z`);
+    d = new Date(d.getTime() + 3 * 60 * 60 * 1000); // +3 horas
+  }
+// --- override puntual para CLAU712 CARTAS en cluster wpout… ---
+try {
+  const clusterWp = (config?.url || "").includes("wpoutjkljkrbliikazkh");
+  const casinoTxt  = (reg?.casino || "").toUpperCase();
+  const esClau712  = (config?.nombre || "").toUpperCase().includes("CLAU712");
+  const esCartas   = casinoTxt.includes("CARTAS");
+
+  if (clusterWp && esClau712 && esCartas) {
+    // Interpretar como hora local AR (en vez de UTC)
+    const [ymd, hmsRaw] = hs.split(/\s+/);
+    const hms = /^\d{2}:\d{2}$/.test(hmsRaw) ? hmsRaw + ":00" : hmsRaw;
+    const dAR = new Date(`${ymd}T${hms}-03:00`);
+    if (!isNaN(dAR)) d = dAR;
+  }
+} catch (_) {}
+  // Si existe 'fecha' y el día en AR no coincide, reforzamos con AR por las dudas
+  if (!isNaN(d) && reg?.fecha) {
+    const dayAR = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(d);
+    if (dayAR !== String(reg.fecha)) {
+      const dAR = new Date(`${reg.fecha}T${hms}-03:00`);
+      if (!isNaN(dAR)) d = dAR;
+    }
+  }
+
+  return isNaN(d) ? null : d;
+}
+
+    // D) Solo hora "HH:mm" o "HH:mm:ss"
+if (typeof hs === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(hs)) {
+  const hh = hs.length === 5 ? hs + ":00" : hs;
+  const baseFecha = reg?.fecha ? String(reg.fecha) : hoyKeyAR(); // ← si no hay fecha, hoy AR
+  const d = new Date(`${baseFecha}T${hh}-03:00`);
+  return isNaN(d) ? null : d;
+}
+  }
+
+  // E) Sin 'hora' pero con 'fecha' → medianoche AR
+  if (!h && f) {
+    const d = new Date(`${f}T00:00:00-03:00`);
+    return isNaN(d) ? null : d;
+  }
+
+  return null;
+}
+
+// Formatea una Date en AR
+function formatFechaAR(d) {
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: TZ_AR, year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(d);
+}
+function formatHoraAR(d) {
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: TZ_AR, hour: "2-digit", minute: "2-digit", second: "2-digit"
+  }).format(d);
+}
+// Key de filtro por día en AR (YYYY-MM-DD)
+function dateKeyAR(d) {
+  if (!d) return null;
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: TZ_AR, year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(d);
+}
+function hoyKeyAR() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+}
+function ajustarDesfasePorJuego(d, reg) {
+  if (!d) return d;
+
+  // Solo estos juegos podrían necesitar ajuste
+  const j = reg?.juegoInferido;
+  const aplicaPorJuego = (j === "mayor_menor" || j === "dados" || j === "trivia");
+  if (!aplicaPorJuego) return d; // ruleta y cartas quedan tal cual
+
+  // 1) Si la hora viene como timestamp SIN zona: "YYYY-MM-DD HH:mm[:ss]"
+  const h = reg?.hora;
+  const esTimestampSinZona =
+    typeof h === "string" &&
+    /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(h) &&
+    !/[TZ]/.test(h); // no trae T ni Z
+
+  // 2) Solo aplicar en el cluster que tenía el desfasaje (+3): wpout...
+  const esClusterWp = (config?.url || "").includes("wpoutjkljkrbliikazkh");
+
+  // ✅ Ajustar +3h SOLO si (hora sin zona) O (estamos en wpout…)
+  if (esTimestampSinZona || esClusterWp) {
+    return new Date(d.getTime() + 3 * 60 * 60 * 1000);
+  }
+
+  // En Genesis/Pirata (ueiiyib…) o cuando venga ISO con Z/offset, no tocar
+  return d;
+}
+
 // 🔢 Data logic
 let registros = [];
+window.registros = registros;
 // === Inferencia de juego (global) ===
 function getJuegoInferido(casinoTxt) {
   const txt = (casinoTxt || "").toUpperCase();
@@ -163,18 +319,50 @@ async function cargarRegistros() {
     return;
   }
 
-  const nombreCasino = config.nombre.toUpperCase();
+  const nombreCasino = config.nombre.toUpperCase().trim();
 let dataFiltrada = data.filter(reg => {
-  const casino = reg.casino?.toUpperCase().trim();
-  return casino?.startsWith(nombreCasino); // ← ✅ esto acepta "CASINO ORO - CARTAS"
-});
-  const usuarioNombre = localStorage.getItem("usuario_nombre")?.toLowerCase();
-  if (usuarioNombre) {
-    dataFiltrada = dataFiltrada.filter(reg => reg.usuario?.toLowerCase() === usuarioNombre);
+  let casino = reg.casino?.toUpperCase().trim();
+
+  // 🩹 Parche 1: corregir SHLEBY → SHELBY
+  if (casino.includes("SHLEBY")) {
+    casino = casino.replace("SHLEBY", "SHELBY");
+    reg.casino = casino;
   }
 
-  registros = dataFiltrada;
+  // 🩹 Parche 2: permitir CLAU712 sin "CASINO" adelante
+  if (casino.startsWith("CLAU712")) {
+    casino = casino.replace(/^CLAU712/, "CASINO CLAU712");
+    reg.casino = casino;
+  }
 
+  return casino.startsWith(nombreCasino);
+});
+  const normalize = (s) =>
+  (s ?? "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")                // saca tildes
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ");           // comprime espacios
+
+const usuarioNombreRaw = localStorage.getItem("usuario_nombre");
+const usuarioNombre = normalize(usuarioNombreRaw);
+
+if (usuarioNombre) {
+  dataFiltrada = dataFiltrada.filter(reg => normalize(reg.usuario) === usuarioNombre);
+}
+
+  registros = dataFiltrada;
+// 🔍 Debug: exponer en window
+window.__ULTIMOS_DATOS = dataFiltrada;
+console.log("🔍 Datos crudos:", dataFiltrada.map(r => ({
+  usuario: r.usuario,
+  casino: r.casino,
+  premio: r.premio,
+  fecha: r.fecha,
+  hora: r.hora
+})));
 // Solo llenar opciones la primera vez (si están vacías)
 if (document.getElementById('casinoFilter').options.length <= 1) {
   llenarOpcionesCasino();
@@ -190,57 +378,39 @@ function filtrarRegistros() {
   const search = document.getElementById('searchInput').value.toLowerCase();
   const casinoSeleccionado = document.getElementById('casinoFilter').value;
   const juegoSeleccionado = document.getElementById('juegoFilter').value;
-  const fechaSeleccionada = document.getElementById('dateFilter').value;
+  const fechaSeleccionada = document.getElementById('dateFilter').value; // YYYY-MM-DD
 
   return registros.filter(reg => {
-  const casinoTxt = reg.casino?.toUpperCase().trim() || "";
-  const [casinoBase] = casinoTxt.split(" - ");
-  reg.casinoNormalizado = casinoBase;
-  reg.juegoInferido = getJuegoInferido(casinoTxt);
+    const casinoTxt = reg.casino?.toUpperCase().trim() || "";
+    const [casinoBase] = casinoTxt.split(" - ");
+    reg.casinoNormalizado = casinoBase;
+    reg.juegoInferido = getJuegoInferido(casinoTxt);
 
-  // ✅ calcular esto ANTES del return
-  const tieneSoloHora =
-    typeof reg.hora === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(reg.hora);
+    // Fecha normalizada (Date) según reglas
+const d = parseRegistroFecha(reg);                 // ← esta línea es necesaria
+const dAjustada = ajustarDesfasePorJuego(d, reg);
+const key = dAjustada ? dateKeyAR(dAjustada) : null;
 
-  return (
-    (!search || reg.usuario?.toLowerCase().includes(search)) &&
-    (!casinoSeleccionado || reg.casinoNormalizado === casinoSeleccionado) &&
-    (!juegoSeleccionado || reg.juegoInferido === juegoSeleccionado) &&
-    // Si solo hay hora (HH:mm[:ss]), NO se excluye por fecha
-    (!fechaSeleccionada || tieneSoloHora || convertirFechaISOArgentina(reg.hora) === fechaSeleccionada)
-  );
-});
+    // FILTROS
+    if (search && !(reg.usuario?.toLowerCase().includes(search))) return false;
+    if (casinoSeleccionado && reg.casinoNormalizado !== casinoSeleccionado) return false;
+    if (juegoSeleccionado && reg.juegoInferido !== juegoSeleccionado) return false;
+
+    if (fechaSeleccionada) {
+      // Si pude parsear, comparo con la key AR
+      if (key) return key === fechaSeleccionada;
+      // Si no pude parsear y existe 'fecha' (Pirata/Genesis), comparo contra eso
+      if (reg.fecha) return String(reg.fecha) === fechaSeleccionada;
+      return false;
+    }
+
+    return true;
+  });
 }
 async function recargarPanelJuegos() {
   await cargarRegistros();
   const filtrados = filtrarRegistros();
   actualizarGrafico(filtrados);
-}
-function convertirAArgentina(horaUTC) {
-  const date = new Date(horaUTC);
-  return date.toLocaleTimeString("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-}
-
-function convertirFechaArgentina(horaUTC) {
-  const date = new Date(horaUTC);
-  return date.toLocaleDateString("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
-}
-
-function convertirFechaISOArgentina(horaUTC) {
-  const date = new Date(horaUTC);
-  return date.toLocaleDateString("sv-SE", {
-    timeZone: "America/Argentina/Buenos_Aires"
-  });
 }
 
 function renderTable() {
@@ -252,35 +422,46 @@ function renderTable() {
 
   const filtrados = registros.filter(reg => {
   const casinoTxt = reg.casino?.toUpperCase().trim() || "";
-
-  // 🔍 Extraer nombre del casino (antes del guion si existe)
-  const [casinoBase] = casinoTxt.split(" - "); // separa "CASINO ORO – CARTAS"
-  reg.casinoNormalizado = casinoBase; // por ej: "CASINO ORO"
-
-  // 🃏 Detectar tipo de juego
+  const [casinoBase] = casinoTxt.split(" - ");
+  reg.casinoNormalizado = casinoBase;
   reg.juegoInferido = getJuegoInferido(casinoTxt);
 
-  // ✅ calcular esto ANTES del return
-  const tieneSoloHora =
-    typeof reg.hora === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(reg.hora);
+ const d = parseRegistroFecha(reg);
+const dAjustada = ajustarDesfasePorJuego(d, reg);
+const key = dAjustada ? dateKeyAR(dAjustada) : null;
 
-  return (
-    (!search || reg.usuario?.toLowerCase().includes(search)) &&
-    (!casinoSeleccionado || reg.casinoNormalizado === casinoSeleccionado) &&
-    (!juegoSeleccionado || reg.juegoInferido === juegoSeleccionado) &&
-    (!fechaSeleccionada || tieneSoloHora || convertirFechaISOArgentina(reg.hora) === fechaSeleccionada)
-  );
+  if (search && !(reg.usuario?.toLowerCase().includes(search))) return false;
+  if (casinoSeleccionado && reg.casinoNormalizado !== casinoSeleccionado) return false;
+  if (juegoSeleccionado && reg.juegoInferido !== juegoSeleccionado) return false;
+
+  if (fechaSeleccionada) {
+    if (key) return key === fechaSeleccionada;
+    if (reg.fecha) return String(reg.fecha) === fechaSeleccionada;
+    return false;
+  }
+
+  // Guardar la date normalizada para no recalcular en el map
+  reg.__dt = dAjustada;
+  return true;
 });
 
-  tbody.innerHTML = filtrados.length
+tbody.innerHTML = filtrados.length
   ? filtrados.map(reg => {
-      const horaLocal = convertirAArgentina(reg.hora);
-      return `<tr><td>${reg.usuario}</td><td>${reg.premio}</td><td>${convertirFechaArgentina(reg.hora)}</td><td>${horaLocal}</td><td>${reg.casino}</td></tr>`;
+      const d = reg.__dt ?? ajustarDesfasePorJuego(parseRegistroFecha(reg), reg);
+      const fechaVis = formatFechaAR(d);
+      const horaVis  = formatHoraAR(d);
+      return `<tr>
+        <td>${reg.usuario ?? '—'}</td>
+        <td>${reg.premio  ?? '—'}</td>
+        <td>${fechaVis}</td>
+        <td>${horaVis}</td>
+        <td>${reg.casino ?? '—'}</td>
+      </tr>`;
     }).join('')
-    : `<tr><td colspan="5" style="text-align:center; padding:20px;">
-    🕹️ <b>¡Próximamente tus juegos estarán disponibles!</b><br>
-    <small style="color:#888;">Estamos trabajando para activarlos lo antes posible.</small>
-  </td></tr>`;
+  : `<tr><td colspan="5" style="text-align:center; padding:20px;">
+      🕹️ <b>¡Próximamente tus juegos estarán disponibles!</b><br>
+      <small style="color:#888;">Estamos trabajando para activarlos lo antes posible.</small>
+    </td></tr>`;
 
   document.getElementById('resumenGeneral').innerHTML = ` Total: <b>${filtrados.length}</b>`;
   
@@ -390,12 +571,13 @@ bind("btn-bono",          () => mostrarSeccion("bonos"));
 });
 
 // También aseguramos que al tocar el botón 1 o 2, se oculte el panel-juegos
-document.querySelectorAll("#btn-buscar-fecha, #btn-bono, #btn-pendiente, #marcar-gasto, #marcar-st, #modo-eliminar")
-  .forEach(el => {
-    el?.addEventListener("click", () => {
-      const panel = document.getElementById("panel-juegos");
-      if (panel) panel.style.display = "none";
-    });
+document.querySelectorAll(
+  "#btn-bono, #btn-pendiente, #marcar-gasto, #marcar-st, #modo-eliminar"
+).forEach(el => {
+  el?.addEventListener("click", () => {
+    const panel = document.getElementById("panel-juegos");
+    if (panel) panel.style.display = "none";
   });
+});
   // Hacer disponible la función globalmente para el botón 🔄
 window.recargarPanelJuegos = recargarPanelJuegos;
