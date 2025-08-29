@@ -138,10 +138,19 @@ const TZ_AR = "America/Argentina/Buenos_Aires";
 // - "YYYY-MM-DD HH:mm[:ss[.mmm]]" (sin TZ) -> tratar como UTC
 // - Pirata/Genesis: fecha (date) + hora "HH:mm[:ss]" -> construir AR (-03:00)
 function parseRegistroFecha(reg) {
-  const h = reg?.hora;
-  const f = reg?.fecha; // algunas tablas lo traen como 'date'
+  // Normalizo valores “vacíos” (—, -, null, "", etc.)
+  let h = reg?.hora;
+  let f = reg?.fecha; // algunas tablas lo traen como 'date'
+  const isEmpty = v => v == null || (typeof v === 'string' && v.trim().match(/^(-|—)?$/));
+  if (isEmpty(h)) h = null;
+  if (isEmpty(f)) f = null;
 
   if (h instanceof Date && !isNaN(h)) return h;
+    // F) Último recurso: usar created_at del registro (si existe)
+  if (reg?.created_at) {
+    const d = new Date(reg.created_at); // suele venir ISO (UTC)
+    if (!isNaN(d)) return d;
+  }
   if (h == null && f == null) return null;
 
   // 0) Epoch numérico (ms o s)
@@ -154,16 +163,20 @@ function parseRegistroFecha(reg) {
   // Normalizar string
   if (typeof h === "string") {
     const hs = h.trim();
-
+  // Normaliza hora con minutos/segundos de 1 dígito a 2 dígitos
+  const hsFixed = hs.replace(
+    /T(\d{2}):(\d{1,2})(?::(\d{1,2}))?([+-]\d{2}:\d{2}|Z)?$/,
+    (_, H, M, S, tz = '') => `T${H}:${String(M).padStart(2,'0')}:${String(S ?? '00').padStart(2,'0')}${tz}`
+  );
     // A) ISO con Z u offset
-    if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+\-]\d{2}:\d{2})$/.test(hs)) {
-      const d = new Date(hs);
+    if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+\-]\d{2}:\d{2})$/.test(hsFixed)) {
+  const d = new Date(hsFixed);
       return isNaN(d) ? null : d;
     }
 
     // B) ISO sin zona: YYYY-MM-DDTHH:mm[:ss[.fff]]
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(hs)) {
-      const d = new Date(hs + "Z"); // tratar como UTC
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(hsFixed)) {
+  const d = new Date(hsFixed + "Z");
       return isNaN(d) ? null : d;
     }
 
@@ -268,18 +281,18 @@ function ajustarDesfasePorJuego(d, reg) {
 
   // 1) Si la hora viene como timestamp SIN zona: "YYYY-MM-DD HH:mm[:ss]"
   const h = reg?.hora;
-  const esTimestampSinZona =
-    typeof h === "string" &&
-    /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(h) &&
-    !/[TZ]/.test(h); // no trae T ni Z
+const esTimestampSinZona =
+  typeof h === "string" &&
+  /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(h);
 
-  // 2) Solo aplicar en el cluster que tenía el desfasaje (+3): wpout...
-  const esClusterWp = (config?.url || "").includes("wpoutjkljkrbliikazkh");
+const esClusterWp = (config?.url || "").includes("wpoutjkljkrbliikazkh");
 
-  // ✅ Ajustar +3h SOLO si (hora sin zona) O (estamos en wpout…)
-  if (esTimestampSinZona || esClusterWp) {
-    return new Date(d.getTime() + 3 * 60 * 60 * 1000);
-  }
+// Ajusto +3 h si:
+//  - la hora es timestamp sin zona, o
+//  - estamos en wpout… PERO el string de hora no trae ya Z/offset
+if (esTimestampSinZona || (esClusterWp && !/[TZ][\d:+-]*$/.test(String(h||'')))) {
+  return new Date(d.getTime() + 3 * 60 * 60 * 1000);
+}
 
   // En Genesis/Pirata (ueiiyib…) o cuando venga ISO con Z/offset, no tocar
   return d;
