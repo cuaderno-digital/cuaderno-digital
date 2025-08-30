@@ -308,6 +308,8 @@ function getJuegoInferido(casinoTxt) {
   if (txt.includes("PREGUNTADOS")) return "trivia";
   if (txt.includes("MAYOR") || txt.includes("MENOR")) return "mayor_menor";
   if (txt.includes("DADOS")) return "dados";
+  if (txt.includes("GLOBO") || txt.includes("BALLOON") || txt.includes("BALON")) return "globo";
+  if (txt.includes("MINAS") || txt.includes("MINES") || txt.includes("MINE")) return "minas";
   return "ruleta"; // default
 }
 async function cargarRegistros() {
@@ -496,13 +498,15 @@ function llenarOpcionesCasino() {
 
 function llenarOpcionesJuego() {
   const select = document.getElementById('juegoFilter');
-  const juegos = ["ruleta", "cartas", "trivia", "mayor_menor", "dados"];
+  const juegos = ["ruleta", "cartas", "trivia", "mayor_menor", "dados", "globo", "minas"];
   const labels = {
     ruleta: "🎯 Ruleta",
     cartas: "🃏 Cartas",
     trivia: "❓ Preguntados",
     mayor_menor: "⬆️⬇️ Mayor o Menor",
-    dados: "🎲 Dados"
+    dados: "🎲 Dados",
+    globo: "🎈 Globo",
+    minas: "💣 Minas"
   };
   select.options.length = 1; // deja "Todos los Juegos"
   juegos.forEach(j => {
